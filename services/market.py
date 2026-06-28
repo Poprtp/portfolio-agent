@@ -1,9 +1,9 @@
-import yfinance as yf
 import pandas as pd
+import yfinance as yf
 
 
 def fetch_price(ticker: str, fallback: float = 0.0) -> float:
-    ticker = ticker.upper().strip()
+    ticker = (ticker or "").upper().strip()
     if ticker == "CASH":
         return 1.0
     try:

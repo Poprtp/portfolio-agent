@@ -9,6 +9,10 @@ def connect():
     return sqlite3.connect(DB_PATH)
 
 
+def _columns(conn, table: str) -> set[str]:
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
 def init_db():
     with connect() as conn:
         conn.execute(
@@ -60,16 +64,11 @@ def init_db():
             )
             """
         )
-        _migrate_columns(conn)
-        _seed_if_empty(conn)
+        migrate(conn)
+        seed_if_empty(conn)
 
 
-def _columns(conn, table):
-    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
-
-
-def _migrate_columns(conn):
-    holding_cols = _columns(conn, "holdings")
+def migrate(conn):
     holding_defaults = {
         "name": "TEXT DEFAULT ''",
         "shares": "REAL DEFAULT 0",
@@ -79,21 +78,35 @@ def _migrate_columns(conn):
         "asset_type": "TEXT DEFAULT 'Stock'",
         "sector": "TEXT DEFAULT ''",
     }
+    existing = _columns(conn, "holdings")
     for col, spec in holding_defaults.items():
-        if col not in holding_cols:
+        if col not in existing:
             conn.execute(f"ALTER TABLE holdings ADD COLUMN {col} {spec}")
 
-    tx_cols = _columns(conn, "transactions")
     tx_defaults = {
         "fees": "REAL DEFAULT 0",
         "note": "TEXT DEFAULT ''",
     }
+    existing = _columns(conn, "transactions")
     for col, spec in tx_defaults.items():
-        if col not in tx_cols:
+        if col not in existing:
             conn.execute(f"ALTER TABLE transactions ADD COLUMN {col} {spec}")
 
+    watch_defaults = {
+        "name": "TEXT DEFAULT ''",
+        "fair_value": "REAL DEFAULT 0",
+        "target_buy_price": "REAL DEFAULT 0",
+        "conviction": "INTEGER DEFAULT 3",
+        "note": "TEXT DEFAULT ''",
+        "current_price": "REAL DEFAULT 0",
+    }
+    existing = _columns(conn, "watchlist")
+    for col, spec in watch_defaults.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE watchlist ADD COLUMN {col} {spec}")
 
-def _seed_if_empty(conn):
+
+def seed_if_empty(conn):
     count = conn.execute("SELECT COUNT(*) FROM holdings").fetchone()[0]
     if count == 0:
         conn.execute(

@@ -1,14 +1,20 @@
-# AI Portfolio OS 3.9
+# AI Portfolio OS 4.0
 
-MVP portfolio engine for Streamlit Cloud.
+MVP portfolio manager built with Streamlit, SQLite, yfinance, pandas, and Plotly.
 
-## Update
-Copy files into your repo, then:
+## What changed in 4.0
+- Portfolio page for holdings management.
+- Transactions page for BUY / SELL / CASH_IN / CASH_OUT.
+- Dashboard is read-only summary.
+- Recent transactions are displayed from database.
+- Risk label is Low / Medium / High instead of only numeric score.
+- Watchlist remains simple.
 
+## Run locally
 ```powershell
-git add .
-git commit -m "Upgrade to Portfolio OS 3.9 portfolio engine"
-git push
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Then reboot Streamlit Cloud.
+## Deploy
+Push to GitHub, then reboot the Streamlit app.
