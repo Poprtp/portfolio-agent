@@ -12,8 +12,17 @@ from services.portfolio import (
     rebalance_actions,
     refresh_prices,
     upsert_holding,
+    upsert_holding_auto,
 )
-from services.trade import build_trade_plan, delete_trade_plan, get_trade_journal, save_trade_plan, trade_score, update_trade_status
+from services.trade import (
+    build_trade_plan,
+    delete_trade_plan,
+    get_trade_journal,
+    professional_trade_setup,
+    save_trade_plan,
+    trade_score,
+    update_trade_status,
+)
 from services.watchlist import (
     delete_watchlist,
     get_top_opportunities,
@@ -80,11 +89,10 @@ for idx, page in enumerate(PAGES):
 
 
 def kpi_row():
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     c1.metric("Portfolio", usd(summary["total_value"]))
     c2.metric("Gain / Loss", usd(summary["total_gain_loss"]), pct(summary["total_return_pct"]))
-    c3.metric("Cash", usd(summary["cash"]), pct(summary["cash_weight"]))
-    c4.metric("Risk", summary["risk_label"], f'{summary["risk_score"]}/100')
+    c3.metric("Risk", summary["risk_label"], f'{summary["risk_score"]}/100')
 
 
 def holdings_table(df, height=220, full=False):
@@ -112,8 +120,9 @@ def holdings_table(df, height=220, full=False):
     st.dataframe(show, use_container_width=True, hide_index=True, height=height)
 
 
-def action_cards(limit=4):
-    actions = rebalance_actions(all_df)
+def action_cards(limit=4, source_df=None):
+    source = holdings_df if source_df is None else source_df
+    actions = rebalance_actions(source)
     if actions.empty:
         st.info("No actions yet.")
         return
@@ -189,16 +198,14 @@ with st.sidebar:
 
     elif nav == "Portfolio":
         st.caption("Add / Edit Holding")
+        st.info("Type only the ticker. Name, type, sector, target weight, and latest price are filled automatically.")
         with st.form("holding_form"):
             ticker = st.text_input("Ticker", value="TSM").upper().strip()
-            name = st.text_input("Name", value="Taiwan Semiconductor ADR")
             shares = st.number_input("Shares", min_value=0.0, value=0.0, step=1.0)
             avg_cost = st.number_input("Average Cost", min_value=0.0, value=0.0, step=1.0)
-            target_weight = st.number_input("Target %", min_value=0.0, max_value=100.0, value=10.0, step=1.0)
-            sector = st.text_input("Sector", value="Semiconductors")
-            asset_type = st.selectbox("Type", ["Stock", "ETF", "Cash", "Crypto", "Other"])
             if st.form_submit_button("Save holding", use_container_width=True) and ticker:
-                upsert_holding(ticker, name, shares, avg_cost, target_weight, asset_type, sector)
+                profile = upsert_holding_auto(ticker, shares, avg_cost)
+                st.success(f"Saved {ticker}: {profile.get('name', ticker)}")
                 st.rerun()
         if not holdings_df.empty:
             del_ticker = st.selectbox("Delete", holdings_df["ticker"].tolist())
@@ -294,7 +301,7 @@ if nav == "Dashboard":
         holdings_table(holdings_df, height=220)
     with right:
         st.subheader("Allocation")
-        st.plotly_chart(allocation_chart(all_df), use_container_width=True)
+        st.plotly_chart(allocation_chart(holdings_df), use_container_width=True)
 
     b1, b2 = st.columns([1, 1], gap="medium")
     with b1:
@@ -337,15 +344,23 @@ elif nav == "Watchlist":
         st.dataframe(show, use_container_width=True, hide_index=True, height=430)
 
 elif nav == "Trade Assistant":
-    st.caption("Rule-based trade score + position sizing")
-    left, right = st.columns([1, 1], gap="medium")
+    st.caption("Professional-style trade setup. Type a ticker and the assistant suggests Entry / Stop / Target.")
 
+    top_left, top_right = st.columns([1, 1], gap="medium")
+    with top_left:
+        ticker = st.text_input("Ticker", value="TSM", help="Type only the ticker, e.g. TSM, MSFT, NVDA").upper().strip()
+    with top_right:
+        st.caption("Uses 1-year daily price action: trend, moving averages, ATR, support/resistance, and risk/reward.")
+
+    setup = professional_trade_setup(ticker)
+
+    left, right = st.columns([1, 1], gap="medium")
     with left:
-        st.subheader("Trade Setup")
-        ticker = st.text_input("Ticker", value="TSM").upper().strip()
-        entry = st.number_input("Entry Price", min_value=0.0, value=430.0, step=1.0)
-        stop = st.number_input("Stop Loss", min_value=0.0, value=390.0, step=1.0)
-        target = st.number_input("Target Price", min_value=0.0, value=500.0, step=1.0)
+        st.subheader("Professional Setup")
+        entry = st.number_input("Suggested Entry", min_value=0.0, value=float(setup.get("entry", 0)), step=1.0)
+        stop = st.number_input("Suggested Stop Loss", min_value=0.0, value=float(setup.get("stop", 0)), step=1.0)
+        target = st.number_input("Suggested Target", min_value=0.0, value=float(setup.get("target", 0)), step=1.0)
+        st.caption("You can override these levels before saving the plan.")
 
     with right:
         st.subheader("Risk Settings")
@@ -358,21 +373,23 @@ elif nav == "Trade Assistant":
     existing_weight = 0.0
     if not holdings_df.empty and ticker in holdings_df["ticker"].values:
         existing_weight = float(holdings_df.loc[holdings_df["ticker"] == ticker, "weight"].iloc[0])
-    analysis = trade_score(plan, current_weight=existing_weight, cash_weight=float(summary.get("cash_weight", 0)))
+    analysis = trade_score(plan, current_weight=existing_weight, cash_weight=float(summary.get("cash_weight", 0)), setup=setup)
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Trade Score", f'{analysis["score"]}/100', analysis["recommendation"])
-    c2.metric("Suggested Shares", f'{plan["suggested_shares"]:,}')
-    c3.metric("Max Loss", usd(plan["max_loss"]))
-    c4.metric("Risk / Reward", f'{plan["risk_reward"]:.2f}R')
+    c2.metric("Entry", usd(entry))
+    c3.metric("Stop", usd(stop))
+    c4.metric("Target", usd(target))
+    c5.metric("R/R", f'{plan["risk_reward"]:.2f}R')
 
-    st.subheader("AI Trade Review")
+    st.subheader("Trade Assistant Review")
     st.markdown(
         f"""
 <div class="action-card">
   <strong>{ticker}</strong> <span class="{analysis["color"]}">{analysis["recommendation"]}</span><br>
-  <span class="muted">{analysis["summary"]}</span><br>
-  <span class="muted">Capital {usd(plan["capital_needed"])} · Position {plan["position_pct"]:.1f}% · Risk/share {usd(plan["risk_per_share"])} · Reward/share {usd(plan["reward_per_share"])}</span>
+  <span class="muted">{setup.get("setup_type", "Setup")} · Trend {setup.get("trend", "-")} · Momentum {setup.get("momentum", "-")} · Confidence {setup.get("confidence", 0)}/100</span><br>
+  <span class="muted">Current {usd(setup.get("current_price", 0))} · MA20 {usd(setup.get("ma20", 0))} · MA50 {usd(setup.get("ma50", 0))} · ATR {usd(setup.get("atr", 0))}</span><br>
+  <span class="muted">Shares {plan["suggested_shares"]:,} · Capital {usd(plan["capital_needed"])} · Max loss {usd(plan["max_loss"])} · Position {plan["position_pct"]:.1f}%</span>
 </div>
 """,
         unsafe_allow_html=True,
@@ -395,10 +412,10 @@ elif nav == "Trade Assistant":
             st.caption("No major rule-based risks.")
 
     with st.form("save_trade_plan_form"):
-        thesis_default = "; ".join(analysis["reasons"]) if analysis["reasons"] else ""
+        thesis_default = f"{setup.get('setup_type', '')}; " + ("; ".join(analysis["reasons"]) if analysis["reasons"] else "")
         risk_default = "; ".join(analysis["risks"]) if analysis["risks"] else ""
-        thesis = st.text_area("Trade thesis", value=thesis_default, height=70)
-        exit_plan = st.text_area("Exit plan", value=f"Stop: {stop}. Target: {target}.", height=70)
+        thesis = st.text_area("Trade thesis", value=thesis_default.strip("; "), height=70)
+        exit_plan = st.text_area("Exit plan", value=f"Entry: {entry}. Stop: {stop}. Target: {target}. Risk/reward: {plan['risk_reward']:.2f}R.", height=70)
         note = st.text_input("Plan note", value=risk_default)
         save_plan = st.form_submit_button("Save to Trade Journal", use_container_width=True)
         if save_plan:
@@ -416,7 +433,7 @@ elif nav == "Trade Assistant":
             )
             st.success("Saved to Trade Journal")
 
-    st.caption("Rule-based assistant only. It does not place orders or guarantee returns.")
+    st.caption("Rule-based professional-style assistant only. It does not place orders or guarantee returns.")
 
 elif nav == "Trade Journal":
     st.caption("Saved trade plans and follow-up status")

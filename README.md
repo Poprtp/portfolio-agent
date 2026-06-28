@@ -1,21 +1,14 @@
-# AI Portfolio OS 4.6 — AI Trade Score
+# Portfolio OS 4.8
 
-Replaces the manual pre-trade checklist with a rule-based Trade Assistant.
+Updates:
+- Portfolio sidebar now only needs ticker, shares, and average cost.
+- Name, asset type, sector, target weight, and latest price are auto-filled from market metadata.
+- Dashboard no longer shows Cash KPI.
+- Dashboard allocation and actions focus on invested holdings, not Cash.
 
-## Added
-- Trade Score 0–100
-- Recommendation: READY / REVIEW / WAIT
-- Automatic reasons and risks
-- Position sizing still uses entry, stop, target, cash, and risk %
-- Trade Journal stores score and recommendation
-
-## Notes
-- This is a planning tool only.
-- It does not place orders.
-- It is rule-based, not connected to OpenAI yet.
-
-## Run
-```bash
-pip install -r requirements.txt
-streamlit run app.py
+Deploy:
+```powershell
+git add .
+git commit -m "Upgrade to Portfolio OS 4.8 portfolio auto metadata"
+git push
 ```

@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 
 from services.database import connect, set_setting
-from services.market import fetch_price
+from services.market import fetch_price, get_symbol_profile
 
 
 def get_holdings() -> pd.DataFrame:
@@ -108,6 +108,23 @@ def upsert_holding(ticker, name, shares, avg_cost, target_weight, asset_type, se
         )
 
 
+def upsert_holding_auto(ticker, shares, avg_cost):
+    ticker = str(ticker).upper().strip()
+    profile = get_symbol_profile(ticker)
+    current_price = profile.get("current_price") or avg_cost
+    upsert_holding(
+        ticker=ticker,
+        name=profile.get("name") or ticker,
+        shares=shares,
+        avg_cost=avg_cost,
+        target_weight=profile.get("target_weight", 10.0),
+        asset_type=profile.get("asset_type", "Stock"),
+        sector=profile.get("sector", ""),
+        current_price=current_price,
+    )
+    return profile
+
+
 def delete_holding(ticker: str):
     with connect() as conn:
         conn.execute("DELETE FROM holdings WHERE ticker=? AND ticker!='CASH'", (str(ticker).upper().strip(),))
@@ -157,9 +174,19 @@ def add_transaction(tx_date, ticker, action, shares, price, fees=0.0, note=""):
                 new_avg = ((old_shares * old_avg) + cost) / new_shares if new_shares else 0
                 conn.execute("UPDATE holdings SET shares=?, avg_cost=?, current_price=? WHERE ticker=?", (new_shares, new_avg, price, ticker))
             else:
+                profile = get_symbol_profile(ticker)
                 conn.execute(
-                    "INSERT INTO holdings (ticker, name, shares, avg_cost, current_price, target_weight, asset_type, sector) VALUES (?, ?, ?, ?, ?, 0, 'Stock', '')",
-                    (ticker, ticker, shares, price, price),
+                    "INSERT INTO holdings (ticker, name, shares, avg_cost, current_price, target_weight, asset_type, sector) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        ticker,
+                        profile.get("name") or ticker,
+                        shares,
+                        price,
+                        price,
+                        profile.get("target_weight", 10.0),
+                        profile.get("asset_type", "Stock"),
+                        profile.get("sector", ""),
+                    ),
                 )
             _update_cash(conn, -cost)
 
