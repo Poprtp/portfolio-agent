@@ -1,14 +1,26 @@
-# Portfolio OS 4.8
+# Portfolio OS 4.9 — Professional Trader Logic Alignment
 
 Updates:
-- Portfolio sidebar now only needs ticker, shares, and average cost.
-- Name, asset type, sector, target weight, and latest price are auto-filled from market metadata.
-- Dashboard no longer shows Cash KPI.
-- Dashboard allocation and actions focus on invested holdings, not Cash.
+- Embedded a 15+ year professional trader framework into Trade Assistant.
+- Trade Assistant now separates:
+  - Setup Quality: technical setup quality
+  - Execution: cash / position size feasibility
+- Watchlist is now aligned with Trade Assistant:
+  - Valuation status
+  - Trade setup status
+  - Technical score
+  - Unified decision
+- Watchlist no longer acts like a pure buy signal from Fair Value alone.
+- Trade Assistant explains whether it is:
+  - READY
+  - REVIEW
+  - WAIT
+  - NO CASH
+- Entry / Stop / Target are generated from trend, MA20/50/200, ATR, support/resistance, and risk/reward.
 
 Deploy:
 ```powershell
 git add .
-git commit -m "Upgrade to Portfolio OS 4.8 portfolio auto metadata"
+git commit -m "Upgrade to Portfolio OS 4.9 professional trader logic"
 git push
 ```

@@ -4,16 +4,17 @@ import pandas as pd
 
 from services.database import connect, set_setting
 from services.market import fetch_price
+from services.trade import professional_trade_setup
 
 
-def _status(price: float, fair: float, buy: float) -> str:
+def _valuation_status(price: float, fair: float, buy: float) -> str:
     if price <= 0:
         return "NO PRICE"
     if buy > 0 and price <= buy:
-        return "BUY ZONE"
+        return "VALUE BUY ZONE"
     if fair > 0 and price <= fair:
-        return "WATCH"
-    return "EXPENSIVE"
+        return "FAIR WATCH"
+    return "VALUATION HIGH"
 
 
 def _mos(price: float, fair: float) -> float:
@@ -22,22 +23,29 @@ def _mos(price: float, fair: float) -> float:
     return round((fair - price) / fair * 100, 1)
 
 
-def _score_row(row) -> float:
-    price = float(row.get("current_price", 0) or 0)
-    fair = float(row.get("fair_value", 0) or 0)
-    buy = float(row.get("target_buy_price", 0) or 0)
-    conviction = int(row.get("conviction", 3) or 3)
-
-    score = conviction * 10
+def _valuation_score(price: float, fair: float, buy: float, conviction: int) -> int:
     mos = _mos(price, fair)
+    score = conviction * 8
     score += max(-25, min(35, mos))
-
     if price > 0 and buy > 0 and price <= buy:
-        score += 25
+        score += 20
     elif price > 0 and fair > 0 and price <= fair:
         score += 10
+    return int(max(0, min(100, score)))
 
-    return max(0, min(100, score))
+
+def _decision(valuation_status: str, trade_action: str, technical_score: int) -> str:
+    if trade_action == "READY" and valuation_status in ["VALUE BUY ZONE", "FAIR WATCH"]:
+        return "ACTIONABLE"
+    if trade_action == "READY" and valuation_status == "VALUATION HIGH":
+        return "TECH READY / VALUATION HIGH"
+    if trade_action == "REVIEW" and valuation_status in ["VALUE BUY ZONE", "FAIR WATCH"]:
+        return "WATCH CLOSELY"
+    if trade_action == "WAIT" and valuation_status in ["VALUE BUY ZONE", "FAIR WATCH"]:
+        return "VALUE OK / WAIT SETUP"
+    if technical_score >= 70:
+        return "TECH WATCH"
+    return "WAIT"
 
 
 def get_watchlist() -> pd.DataFrame:
@@ -45,19 +53,52 @@ def get_watchlist() -> pd.DataFrame:
         df = pd.read_sql_query("SELECT * FROM watchlist ORDER BY ticker", conn)
     if df.empty:
         return df
+
     for col in ["fair_value", "target_buy_price", "current_price", "conviction"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
-    df["mos"] = df.apply(lambda r: _mos(float(r["current_price"]), float(r["fair_value"])), axis=1)
-    df["status"] = df.apply(lambda r: _status(float(r["current_price"]), float(r["fair_value"]), float(r["target_buy_price"])), axis=1)
-    df["score"] = df.apply(_score_row, axis=1).round(0).astype(int)
-    return df.sort_values(["score", "conviction"], ascending=False)
+
+    rows = []
+    for _, row in df.iterrows():
+        item = row.to_dict()
+        price = float(item.get("current_price", 0) or 0)
+        fair = float(item.get("fair_value", 0) or 0)
+        buy = float(item.get("target_buy_price", 0) or 0)
+        conviction = int(item.get("conviction", 3) or 3)
+
+        setup = professional_trade_setup(item.get("ticker", ""))
+        technical_score = int(setup.get("confidence", 0) or 0)
+        trade_action = setup.get("recommendation", "WAIT")
+        valuation_score = _valuation_score(price, fair, buy, conviction)
+        valuation_status = _valuation_status(price, fair, buy)
+
+        # Unified pro-trader score: technical setup first, valuation second, conviction last.
+        total_score = int(max(0, min(100, round(technical_score * 0.55 + valuation_score * 0.30 + conviction * 4))))
+
+        item.update(
+            {
+                "mos": _mos(price, fair),
+                "valuation_status": valuation_status,
+                "trade_action": trade_action,
+                "technical_score": technical_score,
+                "setup_type": setup.get("setup_type", ""),
+                "decision": _decision(valuation_status, trade_action, technical_score),
+                "score": total_score,
+            }
+        )
+        rows.append(item)
+
+    out = pd.DataFrame(rows)
+    return out.sort_values(["score", "technical_score", "conviction"], ascending=False)
 
 
 def get_top_opportunities(limit: int = 3) -> pd.DataFrame:
     df = get_watchlist()
     if df.empty:
         return df
-    return df[df["status"].isin(["BUY ZONE", "WATCH"])].head(limit)
+    priority = df[df["decision"].isin(["ACTIONABLE", "WATCH CLOSELY", "TECH READY / VALUATION HIGH"])]
+    if priority.empty:
+        priority = df.head(limit)
+    return priority.head(limit)
 
 
 def upsert_watchlist(ticker, name, fair_value, target_buy_price, conviction, note):
@@ -86,7 +127,8 @@ def delete_watchlist(ticker):
 
 
 def refresh_watchlist_prices() -> dict:
-    df = get_watchlist()
+    with connect() as conn:
+        df = pd.read_sql_query("SELECT * FROM watchlist ORDER BY ticker", conn)
     updated = 0
     fallback = 0
     with connect() as conn:

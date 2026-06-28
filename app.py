@@ -81,6 +81,7 @@ def set_page(page):
 
 
 st.title("AI Portfolio OS")
+st.caption("Professional trader logic: capital protection first, defined risk, no chasing extended moves.")
 nav_cols = st.columns([.85, .85, 1.05, .9, .95, 1.05, .85, 1.2])
 for idx, page in enumerate(PAGES):
     with nav_cols[idx]:
@@ -170,16 +171,17 @@ def recent_transaction_cards(limit=5):
 def opportunity_cards(limit=3):
     opp = get_top_opportunities(limit)
     if opp.empty:
-        st.info("No buy-zone opportunities.")
+        st.info("No watchlist opportunities yet.")
         return
     for _, row in opp.iterrows():
-        status = row["status"]
-        color = "green" if status == "BUY ZONE" else "yellow"
+        decision = row.get("decision", "WAIT")
+        color = "green" if decision == "ACTIONABLE" else "yellow" if "WATCH" in decision or "READY" in decision else "muted"
         st.markdown(
             f"""
 <div class="action-card">
-  <strong>{row['ticker']}</strong> <span class="{color}">{status}</span><br>
-  <span class="muted">Price {usd(row['current_price'])} · Buy {usd(row['target_buy_price'])} · MOS {row['mos']:.1f}%</span>
+  <strong>{row['ticker']}</strong> <span class="{color}">{decision}</span><br>
+  <span class="muted">Trade {row.get('trade_action', '-')} · {row.get('setup_type', '-')} · Tech {int(row.get('technical_score', 0))}/100</span><br>
+  <span class="muted">Valuation {row.get('valuation_status', '-')} · MOS {row.get('mos', 0):.1f}%</span>
 </div>
 """,
             unsafe_allow_html=True,
@@ -247,8 +249,8 @@ with st.sidebar:
                 st.rerun()
 
     elif nav == "Trade Assistant":
-        st.caption("Rule-based trade score")
-        st.info("Use this before placing a trade. It does not execute orders.")
+        st.caption("15-year trader logic")
+        st.info("Setup quality and execution feasibility are separated. The system does not execute orders.")
         st.metric("Portfolio", usd(summary["total_value"]))
         st.metric("Cash", usd(summary["cash"]))
 
@@ -323,12 +325,15 @@ elif nav == "Transactions":
     st.dataframe(get_transactions(), use_container_width=True, hide_index=True, height=470)
 
 elif nav == "Watchlist":
-    st.caption("Buy zone and margin of safety ranking")
+    st.caption("Unified watchlist: valuation + professional technical setup. Valuation is not a trade signal by itself.")
     wdf = get_watchlist()
     if wdf.empty:
         st.info("No watchlist yet.")
     else:
-        show = wdf[["ticker", "name", "current_price", "fair_value", "target_buy_price", "mos", "status", "conviction", "score"]].rename(
+        show = wdf[[
+            "ticker", "name", "current_price", "fair_value", "target_buy_price", "mos",
+            "valuation_status", "trade_action", "setup_type", "technical_score", "decision", "score"
+        ]].rename(
             columns={
                 "ticker": "Ticker",
                 "name": "Name",
@@ -336,21 +341,24 @@ elif nav == "Watchlist":
                 "fair_value": "Fair Value",
                 "target_buy_price": "Buy Zone",
                 "mos": "MOS %",
-                "status": "Status",
-                "conviction": "Conviction",
+                "valuation_status": "Valuation",
+                "trade_action": "Trade Setup",
+                "setup_type": "Setup Type",
+                "technical_score": "Technical",
+                "decision": "Decision",
                 "score": "Score",
             }
         )
         st.dataframe(show, use_container_width=True, hide_index=True, height=430)
 
 elif nav == "Trade Assistant":
-    st.caption("Professional-style trade setup. Type a ticker and the assistant suggests Entry / Stop / Target.")
+    st.caption("Professional trade assistant: type a ticker and get Entry / Stop / Target using 15-year trader logic.")
 
     top_left, top_right = st.columns([1, 1], gap="medium")
     with top_left:
         ticker = st.text_input("Ticker", value="TSM", help="Type only the ticker, e.g. TSM, MSFT, NVDA").upper().strip()
     with top_right:
-        st.caption("Uses 1-year daily price action: trend, moving averages, ATR, support/resistance, and risk/reward.")
+        st.caption("Uses 1-year price action, trend filter, MA20/50/200, ATR, support/resistance, and disciplined risk rules.")
 
     setup = professional_trade_setup(ticker)
 
@@ -376,20 +384,21 @@ elif nav == "Trade Assistant":
     analysis = trade_score(plan, current_weight=existing_weight, cash_weight=float(summary.get("cash_weight", 0)), setup=setup)
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Trade Score", f'{analysis["score"]}/100', analysis["recommendation"])
-    c2.metric("Entry", usd(entry))
-    c3.metric("Stop", usd(stop))
-    c4.metric("Target", usd(target))
-    c5.metric("R/R", f'{plan["risk_reward"]:.2f}R')
+    c1.metric("Setup Quality", f'{analysis["setup_score"]}/100', analysis["setup_recommendation"])
+    c2.metric("Execution", analysis["execution_status"], analysis["recommendation"])
+    c3.metric("Entry", usd(entry))
+    c4.metric("Stop", usd(stop))
+    c5.metric("Target / R", f'{usd(target)} · {plan["risk_reward"]:.2f}R')
 
     st.subheader("Trade Assistant Review")
     st.markdown(
         f"""
 <div class="action-card">
   <strong>{ticker}</strong> <span class="{analysis["color"]}">{analysis["recommendation"]}</span><br>
-  <span class="muted">{setup.get("setup_type", "Setup")} · Trend {setup.get("trend", "-")} · Momentum {setup.get("momentum", "-")} · Confidence {setup.get("confidence", 0)}/100</span><br>
+  <span class="muted">{setup.get("setup_type", "Setup")} · Trend {setup.get("trend", "-")} · Momentum {setup.get("momentum", "-")} · Setup {setup.get("confidence", 0)}/100</span><br>
   <span class="muted">Current {usd(setup.get("current_price", 0))} · MA20 {usd(setup.get("ma20", 0))} · MA50 {usd(setup.get("ma50", 0))} · ATR {usd(setup.get("atr", 0))}</span><br>
-  <span class="muted">Shares {plan["suggested_shares"]:,} · Capital {usd(plan["capital_needed"])} · Max loss {usd(plan["max_loss"])} · Position {plan["position_pct"]:.1f}%</span>
+  <span class="muted">Shares {plan["suggested_shares"]:,} · Capital {usd(plan["capital_needed"])} · Max loss {usd(plan["max_loss"])} · Position {plan["position_pct"]:.1f}%</span><br>
+  <span class="muted">Rule: {setup.get("trade_rule", "Respect the stop and avoid forcing trades.")}</span>
 </div>
 """,
         unsafe_allow_html=True,
@@ -397,14 +406,14 @@ elif nav == "Trade Assistant":
 
     r1, r2 = st.columns([1, 1], gap="medium")
     with r1:
-        st.markdown("**Reasons**")
+        st.markdown("**Professional Reasons**")
         if analysis["reasons"]:
             for item in analysis["reasons"]:
                 st.markdown(f"- {item}")
         else:
             st.caption("No positive factors yet.")
     with r2:
-        st.markdown("**Risks**")
+        st.markdown("**Professional Risks**")
         if analysis["risks"]:
             for item in analysis["risks"]:
                 st.markdown(f"- {item}")
@@ -412,7 +421,7 @@ elif nav == "Trade Assistant":
             st.caption("No major rule-based risks.")
 
     with st.form("save_trade_plan_form"):
-        thesis_default = f"{setup.get('setup_type', '')}; " + ("; ".join(analysis["reasons"]) if analysis["reasons"] else "")
+        thesis_default = f"{setup.get('setup_type', '')} - {analysis.get('summary', '')}; " + ("; ".join(analysis["reasons"]) if analysis["reasons"] else "")
         risk_default = "; ".join(analysis["risks"]) if analysis["risks"] else ""
         thesis = st.text_area("Trade thesis", value=thesis_default.strip("; "), height=70)
         exit_plan = st.text_area("Exit plan", value=f"Entry: {entry}. Stop: {stop}. Target: {target}. Risk/reward: {plan['risk_reward']:.2f}R.", height=70)
@@ -433,7 +442,7 @@ elif nav == "Trade Assistant":
             )
             st.success("Saved to Trade Journal")
 
-    st.caption("Rule-based professional-style assistant only. It does not place orders or guarantee returns.")
+    st.caption("Professional rule-based assistant only. It does not place orders or guarantee returns. Use it as decision support, not a signal service.")
 
 elif nav == "Trade Journal":
     st.caption("Saved trade plans and follow-up status")
