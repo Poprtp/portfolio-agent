@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+from datetime import datetime
 
 DB_PATH = Path("data/portfolio.db")
 DB_PATH.parent.mkdir(exist_ok=True)
@@ -7,10 +8,6 @@ DB_PATH.parent.mkdir(exist_ok=True)
 
 def connect():
     return sqlite3.connect(DB_PATH)
-
-
-def _columns(conn, table: str) -> set[str]:
-    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
 
 def init_db():
@@ -64,11 +61,16 @@ def init_db():
             )
             """
         )
-        migrate(conn)
-        seed_if_empty(conn)
+        _migrate_columns(conn)
+        _seed_if_empty(conn)
 
 
-def migrate(conn):
+def _columns(conn, table):
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def _migrate_columns(conn):
+    holding_cols = _columns(conn, "holdings")
     holding_defaults = {
         "name": "TEXT DEFAULT ''",
         "shares": "REAL DEFAULT 0",
@@ -78,35 +80,30 @@ def migrate(conn):
         "asset_type": "TEXT DEFAULT 'Stock'",
         "sector": "TEXT DEFAULT ''",
     }
-    existing = _columns(conn, "holdings")
     for col, spec in holding_defaults.items():
-        if col not in existing:
+        if col not in holding_cols:
             conn.execute(f"ALTER TABLE holdings ADD COLUMN {col} {spec}")
 
+    tx_cols = _columns(conn, "transactions")
     tx_defaults = {
         "fees": "REAL DEFAULT 0",
         "note": "TEXT DEFAULT ''",
     }
-    existing = _columns(conn, "transactions")
     for col, spec in tx_defaults.items():
-        if col not in existing:
+        if col not in tx_cols:
             conn.execute(f"ALTER TABLE transactions ADD COLUMN {col} {spec}")
 
+    watch_cols = _columns(conn, "watchlist")
     watch_defaults = {
-        "name": "TEXT DEFAULT ''",
-        "fair_value": "REAL DEFAULT 0",
-        "target_buy_price": "REAL DEFAULT 0",
-        "conviction": "INTEGER DEFAULT 3",
-        "note": "TEXT DEFAULT ''",
         "current_price": "REAL DEFAULT 0",
+        "note": "TEXT DEFAULT ''",
     }
-    existing = _columns(conn, "watchlist")
     for col, spec in watch_defaults.items():
-        if col not in existing:
+        if col not in watch_cols:
             conn.execute(f"ALTER TABLE watchlist ADD COLUMN {col} {spec}")
 
 
-def seed_if_empty(conn):
+def _seed_if_empty(conn):
     count = conn.execute("SELECT COUNT(*) FROM holdings").fetchone()[0]
     if count == 0:
         conn.execute(
@@ -139,3 +136,21 @@ def seed_if_empty(conn):
             """,
             rows,
         )
+
+
+def set_setting(key: str, value: str):
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+
+
+def get_setting(key: str, default: str = "") -> str:
+    with connect() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row[0] if row else default
+
+
+def now_label():
+    return datetime.now().strftime("%Y-%m-%d %H:%M")

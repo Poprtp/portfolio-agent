@@ -9,10 +9,9 @@ def get_watchlist() -> pd.DataFrame:
         df = pd.read_sql_query("SELECT * FROM watchlist ORDER BY ticker", conn)
     if df.empty:
         return df
-    for col in ["fair_value", "target_buy_price", "current_price", "conviction"]:
+    for col in ["fair_value", "target_buy_price", "current_price"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
     df["score"] = df.apply(_score_row, axis=1).round(0).astype(int)
-    df["mos_pct"] = df.apply(lambda r: ((r["fair_value"] - r["current_price"]) / r["fair_value"] * 100) if r["fair_value"] else 0, axis=1).round(1)
     return df.sort_values("score", ascending=False)
 
 
@@ -31,7 +30,7 @@ def _score_row(row) -> float:
 
 def upsert_watchlist(ticker, name, fair_value, target_buy_price, conviction, note):
     ticker = ticker.upper().strip()
-    current = fetch_price(ticker, 0)
+    current, _ = fetch_price(ticker, 0)
     with connect() as conn:
         conn.execute(
             """
@@ -45,7 +44,7 @@ def upsert_watchlist(ticker, name, fair_value, target_buy_price, conviction, not
                 note=excluded.note,
                 current_price=excluded.current_price
             """,
-            (ticker, name, float(fair_value or 0), float(target_buy_price or 0), int(conviction or 3), note, current),
+            (ticker, name, fair_value, target_buy_price, conviction, note, current),
         )
 
 
