@@ -58,6 +58,21 @@ def get_enriched_holdings() -> pd.DataFrame:
     df = get_holdings()
     if df.empty:
         return df
+    defaults = {
+        "shares": 0.0,
+        "avg_cost": 0.0,
+        "current_price": 0.0,
+        "target_weight": 0.0,
+        "asset_type": "Stock",
+        "sector": "",
+    }
+    for col, value in defaults.items():
+        if col not in df.columns:
+            df[col] = value
+    df["current_price"] = df.apply(
+        lambda r: 1.0 if r["ticker"] == "CASH" else (r["current_price"] if float(r["current_price"] or 0) > 0 else r["avg_cost"]),
+        axis=1,
+    )
     df["market_value"] = df["shares"].astype(float) * df["current_price"].astype(float)
     df["cost_basis"] = df["shares"].astype(float) * df["avg_cost"].astype(float)
     df["gain_loss"] = df["market_value"] - df["cost_basis"]

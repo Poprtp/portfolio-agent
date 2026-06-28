@@ -58,6 +58,37 @@ def init_db():
             )
             """
         )
+    ensure_schema()
+
+
+def ensure_schema():
+    """Add missing columns for older Streamlit Cloud databases."""
+    with closing(get_conn()) as conn, conn:
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(holdings)").fetchall()}
+        required = {
+            "current_price": "REAL NOT NULL DEFAULT 0",
+            "target_weight": "REAL NOT NULL DEFAULT 0",
+            "asset_type": "TEXT NOT NULL DEFAULT 'Stock'",
+            "sector": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in required.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE holdings ADD COLUMN {column} {definition}")
+
+        existing_w = {row[1] for row in conn.execute("PRAGMA table_info(watchlist)").fetchall()}
+        required_w = {
+            "current_price": "REAL NOT NULL DEFAULT 0",
+            "fair_value": "REAL NOT NULL DEFAULT 0",
+            "target_buy_price": "REAL NOT NULL DEFAULT 0",
+            "conviction": "INTEGER NOT NULL DEFAULT 3",
+            "note": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in required_w.items():
+            if column not in existing_w:
+                conn.execute(f"ALTER TABLE watchlist ADD COLUMN {column} {definition}")
+
+        conn.execute("UPDATE holdings SET current_price=avg_cost WHERE current_price IS NULL OR current_price=0")
+        conn.execute("UPDATE holdings SET current_price=1, avg_cost=1 WHERE ticker='CASH'")
 
 
 def seed_default_data():
