@@ -153,12 +153,13 @@ with st.sidebar:
     st.divider()
 
     if nav == "Dashboard":
-        if st.button("Refresh prices", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-        st.metric("Risk", f'{summary["risk_score"]}/100')
-        st.caption("Top actions")
-        action_cards(limit=3)
+        top_left, top_right = st.columns([1, 0.18])
+        with top_right:
+            if st.button("Refresh prices", use_container_width=True):
+                st.cache_data.clear()
+                st.rerun()
+
+        kpi_row()
 
     elif nav == "Portfolio":
         st.caption("Add / Edit Holding")
