@@ -1,116 +1,96 @@
+from __future__ import annotations
+
 import sqlite3
 from pathlib import Path
-import pandas as pd
+from datetime import datetime
 
-DB_PATH = Path('portfolio.db')
-SEED_PATH = Path('data/seed_holdings.csv')
-
-
-def connect():
-    return sqlite3.connect(DB_PATH, check_same_thread=False)
+DB_PATH = Path("data/portfolio.db")
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
-def init_db():
-    conn = connect()
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    conn = get_connection()
     cur = conn.cursor()
-    cur.execute('''
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS holdings (
             ticker TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             shares REAL NOT NULL DEFAULT 0,
             avg_cost REAL NOT NULL DEFAULT 0,
-            target_weight REAL NOT NULL DEFAULT 0
+            target_weight REAL NOT NULL DEFAULT 0,
+            asset_type TEXT NOT NULL DEFAULT 'Stock',
+            sector TEXT NOT NULL DEFAULT 'Unknown'
         )
-    ''')
-    cur.execute('''
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT NOT NULL,
             ticker TEXT NOT NULL,
-            side TEXT NOT NULL,
-            shares REAL NOT NULL,
-            price REAL NOT NULL,
-            notes TEXT
+            action TEXT NOT NULL CHECK(action IN ('BUY','SELL','DIVIDEND','CASH_IN','CASH_OUT')),
+            shares REAL NOT NULL DEFAULT 0,
+            price REAL NOT NULL DEFAULT 0,
+            fees REAL NOT NULL DEFAULT 0,
+            note TEXT DEFAULT ''
         )
-    ''')
-    cur.execute('''
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS watchlist (
             ticker TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             fair_value REAL NOT NULL DEFAULT 0,
             target_buy_price REAL NOT NULL DEFAULT 0,
-            conviction INTEGER NOT NULL DEFAULT 50,
-            notes TEXT
+            conviction INTEGER NOT NULL DEFAULT 3,
+            note TEXT DEFAULT ''
         )
-    ''')
-    count = cur.execute('SELECT COUNT(*) FROM holdings').fetchone()[0]
-    if count == 0 and SEED_PATH.exists():
-        seed = pd.read_csv(SEED_PATH)
-        seed.to_sql('holdings', conn, if_exists='append', index=False)
-    watch_count = cur.execute('SELECT COUNT(*) FROM watchlist').fetchone()[0]
-    if watch_count == 0:
-        rows = [
-            ('TSM','Taiwan Semiconductor ADR',370,390,90,'Core AI infrastructure / foundry leader'),
-            ('MSFT','Microsoft',420,360,88,'AI platform and cloud compounder'),
-            ('AVGO','Broadcom',420,340,84,'AI networking and custom ASIC exposure'),
-            ('NVDA','NVIDIA',190,165,80,'AI leader but valuation sensitive'),
-            ('GOOGL','Alphabet',220,180,78,'AI + search + cloud optionality'),
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def seed_default_data() -> None:
+    conn = get_connection()
+    cur = conn.cursor()
+    count = cur.execute("SELECT COUNT(*) AS c FROM holdings").fetchone()["c"]
+    if count == 0:
+        holdings = [
+            ("QQQI", "NEOS Nasdaq-100 High Income ETF", 132, 52, 35, "ETF", "Income"),
+            ("TSM", "Taiwan Semiconductor ADR", 0, 0, 20, "Stock", "Semiconductors"),
+            ("NVDA", "NVIDIA", 0, 0, 15, "Stock", "Semiconductors"),
+            ("AVGO", "Broadcom", 0, 0, 10, "Stock", "Semiconductors"),
+            ("MSFT", "Microsoft", 0, 0, 10, "Stock", "Software"),
+            ("CASH", "Cash", 10, 1, 10, "Cash", "Cash"),
         ]
-        cur.executemany('INSERT OR IGNORE INTO watchlist VALUES (?,?,?,?,?,?)', rows)
-    conn.commit()
-    conn.close()
-
-
-def read_table(table: str) -> pd.DataFrame:
-    conn = connect()
-    df = pd.read_sql_query(f'SELECT * FROM {table}', conn)
-    conn.close()
-    return df
-
-
-def upsert_holding(ticker, name, shares, avg_cost, target_weight):
-    conn = connect()
-    conn.execute('''
-        INSERT INTO holdings (ticker, name, shares, avg_cost, target_weight)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(ticker) DO UPDATE SET
-            name=excluded.name,
-            shares=excluded.shares,
-            avg_cost=excluded.avg_cost,
-            target_weight=excluded.target_weight
-    ''', (ticker.upper(), name, shares, avg_cost, target_weight))
-    conn.commit()
-    conn.close()
-
-
-def delete_holding(ticker):
-    conn = connect()
-    conn.execute('DELETE FROM holdings WHERE ticker=?', (ticker.upper(),))
-    conn.commit()
-    conn.close()
-
-
-def add_transaction(date, ticker, side, shares, price, notes=''):
-    conn = connect()
-    conn.execute('''
-        INSERT INTO transactions (date, ticker, side, shares, price, notes)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (date, ticker.upper(), side.upper(), shares, price, notes))
-    conn.commit()
-    conn.close()
-
-
-def upsert_watchlist(ticker, name, fair_value, target_buy_price, conviction, notes):
-    conn = connect()
-    conn.execute('''
-        INSERT INTO watchlist (ticker, name, fair_value, target_buy_price, conviction, notes)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(ticker) DO UPDATE SET
-            name=excluded.name,
-            fair_value=excluded.fair_value,
-            target_buy_price=excluded.target_buy_price,
-            conviction=excluded.conviction,
-            notes=excluded.notes
-    ''', (ticker.upper(), name, fair_value, target_buy_price, int(conviction), notes))
+        cur.executemany(
+            "INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector) VALUES (?,?,?,?,?,?,?)",
+            holdings,
+        )
+        cur.execute("INSERT INTO transactions(date,ticker,action,shares,price,fees,note) VALUES (?,?,?,?,?,?,?)",
+                    (datetime.now().date().isoformat(), "QQQI", "BUY", 132, 52, 0, "Initial position"))
+        watchlist = [
+            ("TSM", "Taiwan Semiconductor ADR", 370, 390, 5, "Core AI infrastructure"),
+            ("MSFT", "Microsoft", 420, 360, 5, "AI platform and cloud"),
+            ("AVGO", "Broadcom", 390, 330, 4, "AI networking and ASIC"),
+            ("NVDA", "NVIDIA", 185, 160, 4, "AI leader, valuation sensitive"),
+            ("GOOGL", "Alphabet", 210, 180, 4, "AI and search platform"),
+            ("AMZN", "Amazon", 240, 200, 4, "AWS and AI infrastructure"),
+            ("META", "Meta Platforms", 760, 650, 4, "AI ads and infrastructure"),
+        ]
+        cur.executemany(
+            "INSERT INTO watchlist(ticker,name,fair_value,target_buy_price,conviction,note) VALUES (?,?,?,?,?,?)",
+            watchlist,
+        )
     conn.commit()
     conn.close()

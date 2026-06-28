@@ -1,45 +1,137 @@
-import numpy as np
+from __future__ import annotations
+
+from datetime import date
 import pandas as pd
-from services.market import get_prices
+from services.database import get_connection
+from services.market import enrich_prices
 
 
-def enrich_holdings(holdings: pd.DataFrame) -> pd.DataFrame:
-    if holdings.empty:
-        return holdings
-    df = holdings.copy()
-    prices = get_prices(df['ticker'].tolist())
-    df['current_price'] = df['ticker'].map(prices).astype(float)
-    df['cost_basis'] = df['shares'] * df['avg_cost']
-    df['market_value'] = df['shares'] * df['current_price']
-    total = df['market_value'].sum()
-    df['weight'] = np.where(total > 0, df['market_value'] / total * 100, 0)
-    df['gain_loss'] = df['market_value'] - df['cost_basis']
-    df['gain_loss_pct'] = np.where(df['cost_basis'] > 0, df['gain_loss'] / df['cost_basis'] * 100, 0)
-    df['drift'] = df['weight'] - df['target_weight']
-    return df.round(2)
+def get_holdings() -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM holdings ORDER BY asset_type, ticker", conn)
+    conn.close()
+    return df
 
 
-def portfolio_metrics(df: pd.DataFrame) -> dict:
+def get_enriched_holdings() -> pd.DataFrame:
+    return enrich_prices(get_holdings())
+
+
+def upsert_holding(ticker: str, name: str, shares: float, avg_cost: float, target_weight: float, asset_type: str, sector: str) -> None:
+    conn = get_connection()
+    conn.execute(
+        """
+        INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector)
+        VALUES(?,?,?,?,?,?,?)
+        ON CONFLICT(ticker) DO UPDATE SET
+            name=excluded.name,
+            shares=excluded.shares,
+            avg_cost=excluded.avg_cost,
+            target_weight=excluded.target_weight,
+            asset_type=excluded.asset_type,
+            sector=excluded.sector
+        """,
+        (ticker.upper(), name, shares, avg_cost, target_weight, asset_type, sector),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_holding(ticker: str) -> None:
+    conn = get_connection()
+    conn.execute("DELETE FROM holdings WHERE ticker=?", (ticker.upper(),))
+    conn.commit()
+    conn.close()
+
+
+def get_transactions() -> pd.DataFrame:
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM transactions ORDER BY date DESC, id DESC", conn)
+    conn.close()
+    return df
+
+
+def add_transaction(tx_date: date, ticker: str, action: str, shares: float, price: float, fees: float, note: str = "") -> None:
+    ticker = ticker.upper()
+    action = action.upper()
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO transactions(date,ticker,action,shares,price,fees,note) VALUES(?,?,?,?,?,?,?)",
+        (tx_date.isoformat(), ticker, action, shares, price, fees, note),
+    )
+    row = conn.execute("SELECT * FROM holdings WHERE ticker=?", (ticker,)).fetchone()
+    if action == "BUY":
+        if row:
+            old_shares = float(row["shares"])
+            old_cost = float(row["avg_cost"])
+            new_shares = old_shares + shares
+            new_avg = ((old_shares * old_cost) + (shares * price) + fees) / new_shares if new_shares else 0
+            conn.execute("UPDATE holdings SET shares=?, avg_cost=? WHERE ticker=?", (new_shares, new_avg, ticker))
+        else:
+            conn.execute("INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector) VALUES(?,?,?,?,?,?,?)",
+                         (ticker, ticker, shares, price, 0, "Stock", "Unknown"))
+    elif action == "SELL" and row:
+        old_shares = float(row["shares"])
+        new_shares = max(old_shares - shares, 0)
+        conn.execute("UPDATE holdings SET shares=? WHERE ticker=?", (new_shares, ticker))
+    elif action == "CASH_IN":
+        conn.execute("INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector) VALUES('CASH','Cash',0,1,10,'Cash','Cash') ON CONFLICT(ticker) DO NOTHING")
+        conn.execute("UPDATE holdings SET shares=shares+? WHERE ticker='CASH'", (price,))
+    elif action == "CASH_OUT":
+        conn.execute("UPDATE holdings SET shares=max(shares-?,0) WHERE ticker='CASH'", (price,))
+    conn.commit()
+    conn.close()
+
+
+def portfolio_summary() -> dict:
+    df = get_enriched_holdings()
+    total = float(df["market_value"].sum()) if not df.empty else 0.0
+    gain = float(df["gain_loss"].sum()) if not df.empty else 0.0
+    cash = float(df.loc[df["ticker"] == "CASH", "market_value"].sum()) if not df.empty else 0.0
+    risk = calculate_risk_score(df)
+    return {
+        "total_value": total,
+        "total_gain_loss": gain,
+        "cash": cash,
+        "cash_weight": (cash / total * 100) if total else 0,
+        "risk_score": risk,
+        "positions": int((df["shares"] > 0).sum()) if not df.empty else 0,
+    }
+
+
+def calculate_risk_score(df: pd.DataFrame) -> int:
     if df.empty:
-        return {'value': 0, 'gain_loss': 0, 'risk_score': 0, 'positions': 0, 'cash': 0}
-    value = float(df['market_value'].sum())
-    gain_loss = float(df['gain_loss'].sum()) if 'gain_loss' in df else 0
-    max_weight = float(df['weight'].max()) if value else 0
-    cash_weight = float(df.loc[df['ticker'].eq('CASH'), 'weight'].sum()) if 'ticker' in df else 0
-    concentration_penalty = min(max_weight, 100) * 0.65
-    cash_penalty = max(0, 10 - cash_weight) * 1.5
-    risk_score = min(100, round(concentration_penalty + cash_penalty, 0))
-    positions = int((df['market_value'] > 0).sum())
-    cash = float(df.loc[df['ticker'].eq('CASH'), 'market_value'].sum()) if 'ticker' in df else 0
-    return {'value': value, 'gain_loss': gain_loss, 'risk_score': risk_score, 'positions': positions, 'cash': cash}
+        return 0
+    score = 25
+    max_weight = float(df["weight"].max()) if "weight" in df else 0
+    if max_weight > 70:
+        score += 40
+    elif max_weight > 50:
+        score += 30
+    elif max_weight > 35:
+        score += 20
+    elif max_weight > 20:
+        score += 10
+    tech_weight = df.loc[df["sector"].isin(["Semiconductors", "Software"]), "weight"].sum()
+    if tech_weight > 70:
+        score += 20
+    elif tech_weight > 50:
+        score += 10
+    cash_weight = df.loc[df["ticker"] == "CASH", "weight"].sum()
+    if cash_weight < 5:
+        score += 10
+    return min(int(score), 100)
 
 
-def rebalance_actions(df: pd.DataFrame, new_cash: float = 0) -> pd.DataFrame:
+def rebalance_actions(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
-    total_after_cash = df['market_value'].sum() + new_cash
-    out = df[['ticker','name','market_value','weight','target_weight','drift']].copy()
-    out['target_value'] = total_after_cash * out['target_weight'] / 100
-    out['suggested_buy'] = (out['target_value'] - out['market_value']).clip(lower=0)
-    out['action'] = out['drift'].apply(lambda x: 'Trim / stop adding' if x > 10 else ('Buy / DCA' if x < -5 else 'Hold'))
-    return out.round(2)
+    out = df[["ticker", "name", "weight", "target_weight", "drift", "market_value"]].copy()
+    def action(drift: float) -> str:
+        if drift > 10:
+            return "Trim / stop buying"
+        if drift < -10:
+            return "Buy / add gradually"
+        return "Hold"
+    out["action"] = out["drift"].apply(action)
+    return out.sort_values("drift", ascending=False)

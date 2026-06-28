@@ -1,9 +1,20 @@
-# AI Portfolio OS 3.0
+# AI Portfolio OS 3.1
 
-A clean Streamlit portfolio dashboard for holdings, transactions, watchlist, charts, risk scoring, and AI review.
+Portfolio Engine upgrade for Streamlit Cloud.
 
-## Local setup
+## Features
+- SQLite portfolio database
+- Holdings management
+- Transaction history
+- Buy/sell recording
+- Cash balance
+- Average cost calculation
+- Portfolio allocation
+- Watchlist
+- Rebalance actions
+- Price charts
 
+## Run locally
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
@@ -11,27 +22,5 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Streamlit Community Cloud
-
-- Repository: your GitHub repo
-- Branch: main
-- Main file path: app.py
-- Python runtime: python-3.11 from `runtime.txt`
-
-## Optional OpenAI setup
-
-In Streamlit Cloud → Manage app → Settings → Secrets:
-
-```toml
-OPENAI_API_KEY = "your_api_key_here"
-```
-
-## Files included
-
-- `app.py` main landing page
-- `pages/` Streamlit pages
-- `services/` data, market, portfolio, and AI logic
-- `data/seed_holdings.csv` initial holdings
-- `.streamlit/config.toml` theme
-- `requirements.txt`
-- `runtime.txt`
+## Deploy
+Push all files to GitHub, then reboot the Streamlit app.

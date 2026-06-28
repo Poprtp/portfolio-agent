@@ -1,23 +1,24 @@
 import streamlit as st
-from services.database import init_db
+from services.database import init_db, seed_default_data
 
-st.set_page_config(page_title='AI Portfolio OS 3.0', page_icon='📈', layout='wide')
+st.set_page_config(page_title="AI Portfolio OS 3.1", page_icon="📈", layout="wide")
 init_db()
+seed_default_data()
 
-st.title('AI Portfolio OS 3.0')
-st.caption('Personal portfolio dashboard, risk control, watchlist ranking, and AI review.')
+st.title("AI Portfolio OS 3.1")
+st.caption("Portfolio engine, holdings, transactions, risk control, and watchlist.")
 
-st.markdown('''
+st.markdown("""
 ### Start here
 Use the sidebar pages to manage your portfolio.
 
 - **Dashboard**: portfolio value, allocation, risk, and rebalance actions
-- **Holdings**: add or edit positions
-- **Transactions**: record buy/sell history
-- **Watchlist**: rank stocks by price vs fair value and conviction
-- **AI Review**: portfolio summary and action plan
-- **Price Chart**: check stock price history
-- **Settings**: deployment and API key notes
-''')
+- **Holdings**: view and edit current positions
+- **Transactions**: record buy/sell transactions and update holdings
+- **Watchlist**: rank stocks by target price and conviction
+- **AI Review**: rule-based portfolio action plan
+- **Price Chart**: stock price history
+- **Settings**: database and deployment notes
+""")
 
-st.info('Go to Dashboard from the sidebar to view your portfolio.')
+st.info("Go to Dashboard from the sidebar to view your portfolio.")
