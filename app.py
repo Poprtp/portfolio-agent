@@ -13,6 +13,7 @@ from services.portfolio import (
     refresh_prices,
     upsert_holding,
 )
+from services.trade import build_trade_plan
 from services.watchlist import (
     delete_watchlist,
     get_top_opportunities,
@@ -49,7 +50,7 @@ button[kind="secondary"] {border-radius:10px !important;}
     unsafe_allow_html=True,
 )
 
-PAGES = ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Settings"]
+PAGES = ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Trade Plan", "Settings"]
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 nav = st.session_state.page
@@ -71,7 +72,7 @@ def set_page(page):
 
 
 st.title("AI Portfolio OS")
-nav_cols = st.columns([.85, .85, 1.05, .9, .85, 2.4])
+nav_cols = st.columns([.85, .85, 1.05, .9, .95, .85, 1.45])
 for idx, page in enumerate(PAGES):
     with nav_cols[idx]:
         if st.button(page, use_container_width=True, type="primary" if page == nav else "secondary"):
@@ -238,6 +239,12 @@ with st.sidebar:
                 delete_watchlist(del_ticker)
                 st.rerun()
 
+    elif nav == "Trade Plan":
+        st.caption("Position sizing")
+        st.info("Use this before placing a trade. It does not execute orders.")
+        st.metric("Portfolio", usd(summary["total_value"]))
+        st.metric("Cash", usd(summary["cash"]))
+
     elif nav == "Settings":
         if st.button("Repair database", use_container_width=True):
             init_db()
@@ -306,6 +313,46 @@ elif nav == "Watchlist":
             }
         )
         st.dataframe(show, use_container_width=True, hide_index=True, height=430)
+
+elif nav == "Trade Plan":
+    st.caption("Risk-based position sizing for stock trades")
+    left, right = st.columns([1, 1], gap="medium")
+
+    with left:
+        st.subheader("Trade Setup")
+        ticker = st.text_input("Ticker", value="TSM").upper().strip()
+        entry = st.number_input("Entry Price", min_value=0.0, value=430.0, step=1.0)
+        stop = st.number_input("Stop Loss", min_value=0.0, value=390.0, step=1.0)
+        target = st.number_input("Target Price", min_value=0.0, value=500.0, step=1.0)
+
+    with right:
+        st.subheader("Risk Settings")
+        account_size = st.number_input("Account / Portfolio Size", min_value=0.0, value=float(summary["total_value"] or 10000), step=100.0)
+        cash_available = st.number_input("Cash Available", min_value=0.0, value=float(summary["cash"] or 0), step=100.0)
+        risk_pct = st.number_input("Risk per Trade %", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
+        max_position_pct = st.number_input("Max Position %", min_value=1.0, max_value=100.0, value=15.0, step=1.0)
+
+    plan = build_trade_plan(ticker, entry, stop, target, account_size, cash_available, risk_pct, max_position_pct)
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Suggested Shares", f'{plan["suggested_shares"]:,}')
+    c2.metric("Capital Needed", usd(plan["capital_needed"]))
+    c3.metric("Max Loss", usd(plan["max_loss"]))
+    c4.metric("Risk / Reward", f'{plan["risk_reward"]:.2f}R')
+
+    st.subheader("Plan")
+    st.markdown(
+        f"""
+<div class="action-card">
+  <strong>{plan["ticker"]}</strong> <span class="{plan["status_color"]}">{plan["status"]}</span><br>
+  <span class="muted">Risk/share {usd(plan["risk_per_share"])} · Reward/share {usd(plan["reward_per_share"])} · Position {plan["position_pct"]:.1f}% of portfolio</span><br>
+  <span class="muted">{plan["note"]}</span>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    st.caption("This is a planning tool only. It does not place orders.")
 
 elif nav == "Settings":
     st.caption("Minimal settings")
