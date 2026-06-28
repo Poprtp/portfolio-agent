@@ -1,13 +1,14 @@
-# AI Portfolio OS 3.2
+# AI Portfolio OS 3.3
 
-Compact dashboard update.
+Compact MVP update.
 
-## Pages
-- Dashboard is now the home page (`app.py`)
-- Portfolio
-- Transactions
-- Watchlist
-- Settings
+## Changes
+- Single-file navigation, no Streamlit auto `app` page item
+- Dashboard opens first
+- Cleaner sidebar
+- Compact KPI cards
+- Action cards instead of action table
+- Recent transaction cards
 
 ## Run
 ```powershell
