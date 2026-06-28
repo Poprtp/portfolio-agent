@@ -1,88 +1,37 @@
-# AI Portfolio OS 2.0
+# AI Portfolio OS 3.0
 
-Dashboard สำหรับดูแลพอร์ตหุ้น: allocation, risk, rebalance, watchlist ranking, price chart และ AI portfolio review.
+A clean Streamlit portfolio dashboard for holdings, transactions, watchlist, charts, risk scoring, and AI review.
 
-## 1) เปิดโฟลเดอร์ใน VS Code
-
-```powershell
-cd D:\Portfolio-Agent-V2
-```
-
-หรือแตก ZIP แล้วเปิดโฟลเดอร์ด้วย VS Code
-
-## 2) สร้าง virtual environment
+## Local setup
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
-```
-
-ถ้า PowerShell ไม่ให้ activate ให้รัน:
-
-```powershell
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-.\venv\Scripts\Activate.ps1
-```
-
-## 3) ติดตั้ง package
-
-```powershell
 pip install -r requirements.txt
-```
-
-## 4) รัน Dashboard
-
-```powershell
 streamlit run app.py
 ```
 
-หลังรัน จะเปิด browser ที่:
+## Streamlit Community Cloud
 
-```text
-http://localhost:8501
+- Repository: your GitHub repo
+- Branch: main
+- Main file path: app.py
+- Python runtime: python-3.11 from `runtime.txt`
+
+## Optional OpenAI setup
+
+In Streamlit Cloud → Manage app → Settings → Secrets:
+
+```toml
+OPENAI_API_KEY = "your_api_key_here"
 ```
 
-## 5) แก้พอร์ต
+## Files included
 
-แก้ไฟล์นี้:
-
-```text
-data/holdings.csv
-```
-
-หรือแก้ในหน้า Dashboard ตรง `Edit Holdings`
-
-ตัวอย่าง column:
-
-```csv
-ticker,name,shares,avg_cost,target_weight,asset_type
-QQQI,NEOS Nasdaq-100 High Income ETF,132,52,35,Income ETF
-TSM,Taiwan Semiconductor ADR,0,0,20,Growth Stock
-```
-
-## 6) เปิด AI Review
-
-คัดลอก `.env.example` เป็น `.env`
-
-```powershell
-copy .env.example .env
-```
-
-ใส่ API key:
-
-```text
-OPENAI_API_KEY=your_api_key_here
-```
-
-แล้วรันใหม่:
-
-```powershell
-streamlit run app.py
-```
-
-## หมายเหตุ
-
-- ราคาใช้ yfinance อาจโหลดช้าหรือบางครั้ง fail ได้
-- TSMC ADR ใช้ ticker `TSM`
-- QQQI ใช้ ticker `QQQI`
-- ระบบนี้เป็น decision-support ไม่ใช่คำสั่งซื้อขายอัตโนมัติ
+- `app.py` main landing page
+- `pages/` Streamlit pages
+- `services/` data, market, portfolio, and AI logic
+- `data/seed_holdings.csv` initial holdings
+- `.streamlit/config.toml` theme
+- `requirements.txt`
+- `runtime.txt`

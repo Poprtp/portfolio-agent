@@ -1,7 +1,0 @@
-ticker,name,shares,avg_cost,target_weight,asset_type
-QQQI,NEOS Nasdaq-100 High Income ETF,132,52,35,Income ETF
-TSM,Taiwan Semiconductor ADR,0,0,20,Growth Stock
-NVDA,NVIDIA,0,0,15,Growth Stock
-AVGO,Broadcom,0,0,10,Growth Stock
-MSFT,Microsoft,0,0,10,Growth Stock
-CASH,Cash,0,0,10,Cash
