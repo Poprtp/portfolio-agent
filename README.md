@@ -1,3 +1,14 @@
-# Portfolio OS 3.8.1 Hotfix
+# AI Portfolio OS 3.9
 
-Fixes legacy Streamlit Cloud database schema error: missing current_price column.
+MVP portfolio engine for Streamlit Cloud.
+
+## Update
+Copy files into your repo, then:
+
+```powershell
+git add .
+git commit -m "Upgrade to Portfolio OS 3.9 portfolio engine"
+git push
+```
+
+Then reboot Streamlit Cloud.

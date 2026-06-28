@@ -1,22 +1,12 @@
 def usd(value):
     try:
-        value = float(value)
-    except (TypeError, ValueError):
-        value = 0.0
-    return f"${value:,.2f}"
+        return f"${float(value):,.2f}"
+    except Exception:
+        return "$0.00"
 
 
 def pct(value):
     try:
-        value = float(value)
-    except (TypeError, ValueError):
-        value = 0.0
-    return f"{value:.1f}%"
-
-
-def num(value, decimals=2):
-    try:
-        value = float(value)
-    except (TypeError, ValueError):
-        value = 0.0
-    return round(value, decimals)
+        return f"{float(value):.1f}%"
+    except Exception:
+        return "0.0%"
