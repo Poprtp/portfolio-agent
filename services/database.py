@@ -64,6 +64,30 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trade_journal (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                ticker TEXT NOT NULL,
+                status TEXT DEFAULT 'Planned',
+                entry REAL DEFAULT 0,
+                stop REAL DEFAULT 0,
+                target REAL DEFAULT 0,
+                shares REAL DEFAULT 0,
+                capital_needed REAL DEFAULT 0,
+                max_loss REAL DEFAULT 0,
+                max_gain REAL DEFAULT 0,
+                risk_reward REAL DEFAULT 0,
+                setup_status TEXT DEFAULT '',
+                checklist_score INTEGER DEFAULT 0,
+                readiness TEXT DEFAULT '',
+                thesis TEXT DEFAULT '',
+                exit_plan TEXT DEFAULT '',
+                note TEXT DEFAULT ''
+            )
+            """
+        )
         _migrate(conn)
         _seed_if_empty(conn)
 
@@ -101,6 +125,17 @@ def _migrate(conn):
     for col, spec in watch_defaults.items():
         if col not in cols:
             conn.execute(f"ALTER TABLE watchlist ADD COLUMN {col} {spec}")
+
+    trade_defaults = {
+        "checklist_score": "INTEGER DEFAULT 0",
+        "readiness": "TEXT DEFAULT ''",
+        "thesis": "TEXT DEFAULT ''",
+        "exit_plan": "TEXT DEFAULT ''",
+    }
+    cols = _columns(conn, "trade_journal")
+    for col, spec in trade_defaults.items():
+        if col not in cols:
+            conn.execute(f"ALTER TABLE trade_journal ADD COLUMN {col} {spec}")
 
 
 def _seed_if_empty(conn):

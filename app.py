@@ -13,7 +13,7 @@ from services.portfolio import (
     refresh_prices,
     upsert_holding,
 )
-from services.trade import build_trade_plan
+from services.trade import build_trade_plan, delete_trade_plan, get_trade_journal, save_trade_plan, trade_score, update_trade_status
 from services.watchlist import (
     delete_watchlist,
     get_top_opportunities,
@@ -50,7 +50,7 @@ button[kind="secondary"] {border-radius:10px !important;}
     unsafe_allow_html=True,
 )
 
-PAGES = ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Trade Plan", "Settings"]
+PAGES = ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Trade Assistant", "Trade Journal", "Settings"]
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
 nav = st.session_state.page
@@ -72,7 +72,7 @@ def set_page(page):
 
 
 st.title("AI Portfolio OS")
-nav_cols = st.columns([.85, .85, 1.05, .9, .95, .85, 1.45])
+nav_cols = st.columns([.85, .85, 1.05, .9, .95, 1.05, .85, 1.2])
 for idx, page in enumerate(PAGES):
     with nav_cols[idx]:
         if st.button(page, use_container_width=True, type="primary" if page == nav else "secondary"):
@@ -239,11 +239,33 @@ with st.sidebar:
                 delete_watchlist(del_ticker)
                 st.rerun()
 
-    elif nav == "Trade Plan":
-        st.caption("Position sizing")
+    elif nav == "Trade Assistant":
+        st.caption("Rule-based trade score")
         st.info("Use this before placing a trade. It does not execute orders.")
         st.metric("Portfolio", usd(summary["total_value"]))
         st.metric("Cash", usd(summary["cash"]))
+
+    elif nav == "Trade Journal":
+        journal = get_trade_journal()
+        st.caption("Trade records")
+        st.metric("Plans", len(journal))
+        if not journal.empty:
+            planned_count = int((journal["status"] == "Planned").sum())
+            open_count = int((journal["status"] == "Open").sum())
+            ready_count = int((journal.get("readiness", "") == "READY").sum()) if "readiness" in journal.columns else 0
+            st.metric("Planned", planned_count)
+            st.metric("Open", open_count)
+            st.metric("Ready", ready_count)
+
+            st.divider()
+            trade_id = st.selectbox("Trade ID", journal["id"].tolist())
+            new_status = st.selectbox("Update Status", ["Planned", "Open", "Closed", "Cancelled"])
+            if st.button("Save status", use_container_width=True):
+                update_trade_status(trade_id, new_status)
+                st.rerun()
+            if st.button("Delete plan", use_container_width=True):
+                delete_trade_plan(trade_id)
+                st.rerun()
 
     elif nav == "Settings":
         if st.button("Repair database", use_container_width=True):
@@ -314,8 +336,8 @@ elif nav == "Watchlist":
         )
         st.dataframe(show, use_container_width=True, hide_index=True, height=430)
 
-elif nav == "Trade Plan":
-    st.caption("Risk-based position sizing for stock trades")
+elif nav == "Trade Assistant":
+    st.caption("Rule-based trade score + position sizing")
     left, right = st.columns([1, 1], gap="medium")
 
     with left:
@@ -333,26 +355,98 @@ elif nav == "Trade Plan":
         max_position_pct = st.number_input("Max Position %", min_value=1.0, max_value=100.0, value=15.0, step=1.0)
 
     plan = build_trade_plan(ticker, entry, stop, target, account_size, cash_available, risk_pct, max_position_pct)
+    existing_weight = 0.0
+    if not holdings_df.empty and ticker in holdings_df["ticker"].values:
+        existing_weight = float(holdings_df.loc[holdings_df["ticker"] == ticker, "weight"].iloc[0])
+    analysis = trade_score(plan, current_weight=existing_weight, cash_weight=float(summary.get("cash_weight", 0)))
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Suggested Shares", f'{plan["suggested_shares"]:,}')
-    c2.metric("Capital Needed", usd(plan["capital_needed"]))
+    c1.metric("Trade Score", f'{analysis["score"]}/100', analysis["recommendation"])
+    c2.metric("Suggested Shares", f'{plan["suggested_shares"]:,}')
     c3.metric("Max Loss", usd(plan["max_loss"]))
     c4.metric("Risk / Reward", f'{plan["risk_reward"]:.2f}R')
 
-    st.subheader("Plan")
+    st.subheader("AI Trade Review")
     st.markdown(
         f"""
 <div class="action-card">
-  <strong>{plan["ticker"]}</strong> <span class="{plan["status_color"]}">{plan["status"]}</span><br>
-  <span class="muted">Risk/share {usd(plan["risk_per_share"])} · Reward/share {usd(plan["reward_per_share"])} · Position {plan["position_pct"]:.1f}% of portfolio</span><br>
-  <span class="muted">{plan["note"]}</span>
+  <strong>{ticker}</strong> <span class="{analysis["color"]}">{analysis["recommendation"]}</span><br>
+  <span class="muted">{analysis["summary"]}</span><br>
+  <span class="muted">Capital {usd(plan["capital_needed"])} · Position {plan["position_pct"]:.1f}% · Risk/share {usd(plan["risk_per_share"])} · Reward/share {usd(plan["reward_per_share"])}</span>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-    st.caption("This is a planning tool only. It does not place orders.")
+    r1, r2 = st.columns([1, 1], gap="medium")
+    with r1:
+        st.markdown("**Reasons**")
+        if analysis["reasons"]:
+            for item in analysis["reasons"]:
+                st.markdown(f"- {item}")
+        else:
+            st.caption("No positive factors yet.")
+    with r2:
+        st.markdown("**Risks**")
+        if analysis["risks"]:
+            for item in analysis["risks"]:
+                st.markdown(f"- {item}")
+        else:
+            st.caption("No major rule-based risks.")
+
+    with st.form("save_trade_plan_form"):
+        thesis_default = "; ".join(analysis["reasons"]) if analysis["reasons"] else ""
+        risk_default = "; ".join(analysis["risks"]) if analysis["risks"] else ""
+        thesis = st.text_area("Trade thesis", value=thesis_default, height=70)
+        exit_plan = st.text_area("Exit plan", value=f"Stop: {stop}. Target: {target}.", height=70)
+        note = st.text_input("Plan note", value=risk_default)
+        save_plan = st.form_submit_button("Save to Trade Journal", use_container_width=True)
+        if save_plan:
+            save_trade_plan(
+                ticker,
+                entry,
+                stop,
+                target,
+                plan,
+                note,
+                checklist_score=analysis["score"],
+                readiness=analysis["recommendation"],
+                thesis=thesis,
+                exit_plan=exit_plan,
+            )
+            st.success("Saved to Trade Journal")
+
+    st.caption("Rule-based assistant only. It does not place orders or guarantee returns.")
+
+elif nav == "Trade Journal":
+    st.caption("Saved trade plans and follow-up status")
+    journal = get_trade_journal()
+    if journal.empty:
+        st.info("No trade plans yet. Create one from Trade Assistant.")
+    else:
+        show = journal.rename(
+            columns={
+                "id": "ID",
+                "created_at": "Created",
+                "ticker": "Ticker",
+                "status": "Status",
+                "entry": "Entry",
+                "stop": "Stop",
+                "target": "Target",
+                "shares": "Shares",
+                "capital_needed": "Capital",
+                "max_loss": "Max Loss",
+                "max_gain": "Max Gain",
+                "risk_reward": "R/R",
+                "setup_status": "Setup",
+                "checklist_score": "Trade Score",
+                "readiness": "Recommendation",
+                "thesis": "Thesis",
+                "exit_plan": "Exit Plan",
+                "note": "Note",
+            }
+        )
+        st.dataframe(show, use_container_width=True, hide_index=True, height=470)
 
 elif nav == "Settings":
     st.caption("Minimal settings")
