@@ -1,26 +1,18 @@
-# Portfolio OS 4.9 — Professional Trader Logic Alignment
+# AI Portfolio OS V5.0 — Daily Trade Desk
 
-Updates:
-- Embedded a 15+ year professional trader framework into Trade Assistant.
-- Trade Assistant now separates:
-  - Setup Quality: technical setup quality
-  - Execution: cash / position size feasibility
-- Watchlist is now aligned with Trade Assistant:
-  - Valuation status
-  - Trade setup status
-  - Technical score
-  - Unified decision
-- Watchlist no longer acts like a pure buy signal from Fair Value alone.
-- Trade Assistant explains whether it is:
-  - READY
-  - REVIEW
-  - WAIT
-  - NO CASH
-- Entry / Stop / Target are generated from trend, MA20/50/200, ATR, support/resistance, and risk/reward.
+Compact daily decision dashboard for stock trading.
 
-Deploy:
+## What changed
+- Added Daily Desk as the first page.
+- Shows what to focus on and what to ignore in one screen.
+- Uses professional trader logic: capital protection, clear setup, no chasing, defined risk.
+- Keeps detailed pages available but makes Daily Desk the primary decision page.
+
+## Update steps
 ```powershell
 git add .
-git commit -m "Upgrade to Portfolio OS 4.9 professional trader logic"
+git commit -m "Upgrade to Portfolio OS 5.0 daily trade desk"
 git push
 ```
+
+Then reboot the Streamlit app.

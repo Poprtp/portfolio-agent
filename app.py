@@ -39,29 +39,40 @@ init_db()
 st.markdown(
     """
 <style>
-.block-container {padding: .65rem 1.05rem 1rem 1.05rem; max-width: 1160px;}
-h1 {font-size: 1.2rem !important; margin: 0 0 .3rem 0 !important; letter-spacing: -0.03em;}
-h2 {font-size: .98rem !important; margin: .55rem 0 .25rem 0 !important;}
-h3 {font-size: .88rem !important; margin: .45rem 0 .25rem 0 !important;}
-[data-testid="stSidebar"] {background: #0f172a; border-right: 1px solid #1f2937; min-width: 210px !important; max-width: 210px !important;}
-[data-testid="stSidebar"] .block-container {padding: 1rem .75rem;}
-[data-testid="stMetric"] {background:#111827; border:1px solid #1f2937; border-radius:12px; padding:9px 11px;}
-[data-testid="stMetricLabel"] {font-size:.72rem; color:#9ca3af;}
-[data-testid="stMetricValue"] {font-size:1.0rem;}
+.block-container {padding: .55rem .95rem .8rem .95rem; max-width: 1180px;}
+h1 {font-size: 1.14rem !important; margin: 0 0 .18rem 0 !important; letter-spacing: -0.03em;}
+h2 {font-size: .95rem !important; margin: .45rem 0 .2rem 0 !important;}
+h3 {font-size: .84rem !important; margin: .35rem 0 .2rem 0 !important;}
+[data-testid="stSidebar"] {background: #0f172a; border-right: 1px solid #1f2937; min-width: 205px !important; max-width: 205px !important;}
+[data-testid="stSidebar"] .block-container {padding: .9rem .7rem;}
+[data-testid="stMetric"] {background:#111827; border:1px solid #1f2937; border-radius:12px; padding:8px 10px;}
+[data-testid="stMetricLabel"] {font-size:.69rem; color:#9ca3af;}
+[data-testid="stMetricValue"] {font-size:.98rem;}
 .stDataFrame {border:1px solid #1f2937; border-radius:12px; overflow:hidden;}
-.action-card {background:#111827; border:1px solid #1f2937; border-radius:12px; padding:9px 11px; margin-bottom:8px;}
-.action-card strong {font-size:.86rem;}
+.action-card {background:#111827; border:1px solid #1f2937; border-radius:12px; padding:8px 10px; margin-bottom:7px;}
+.action-card strong {font-size:.84rem;}
+.desk-hero {background:linear-gradient(135deg,#111827 0%,#162033 100%); border:1px solid #243047; border-radius:16px; padding:14px 16px; min-height:118px;}
+.desk-card {background:#111827; border:1px solid #1f2937; border-radius:14px; padding:11px 12px; min-height:116px;}
+.desk-card-small {background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:8px 10px; margin-bottom:7px;}
+.desk-title {font-size:.72rem; color:#9ca3af; margin-bottom:6px; text-transform:uppercase; letter-spacing:.04em;}
+.desk-main {font-size:1.35rem; font-weight:700; letter-spacing:-.03em; margin-bottom:5px;}
+.desk-sub {font-size:.84rem; color:#cbd5e1; line-height:1.35;}
+.chip {display:inline-block; padding:3px 8px; border-radius:999px; font-size:.72rem; font-weight:700; margin-right:5px;}
+.chip-green {background:#064e3b; color:#34d399;}
+.chip-yellow {background:#422006; color:#facc15;}
+.chip-red {background:#450a0a; color:#f87171;}
+.chip-blue {background:#172554; color:#60a5fa;}
 .green {color:#22c55e;} .red {color:#ef4444;} .yellow {color:#facc15;} .muted {color:#9ca3af;} .blue {color:#60a5fa;}
-hr {border-color:#1f2937; margin:.65rem 0;}
+hr {border-color:#1f2937; margin:.5rem 0;}
 button[kind="secondary"] {border-radius:10px !important;}
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-PAGES = ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Trade Assistant", "Trade Journal", "Settings"]
+PAGES = ["Daily Desk", "Dashboard", "Portfolio", "Transactions", "Watchlist", "Trade Assistant", "Trade Journal", "Settings"]
 if "page" not in st.session_state:
-    st.session_state.page = "Dashboard"
+    st.session_state.page = "Daily Desk"
 nav = st.session_state.page
 
 
@@ -81,8 +92,8 @@ def set_page(page):
 
 
 st.title("AI Portfolio OS")
-st.caption("Professional trader logic: capital protection first, defined risk, no chasing extended moves.")
-nav_cols = st.columns([.85, .85, 1.05, .9, .95, 1.05, .85, 1.2])
+st.caption("Daily decision support: focus first, details second.")
+nav_cols = st.columns([.95, .8, .8, 1.0, .85, 1.05, .95, .8, 1.0])
 for idx, page in enumerate(PAGES):
     with nav_cols[idx]:
         if st.button(page, use_container_width=True, type="primary" if page == nav else "secondary"):
@@ -188,12 +199,143 @@ def opportunity_cards(limit=3):
         )
 
 
+
+def _chip_class(label: str) -> str:
+    label = (label or "").upper()
+    if label in ["READY", "ACTIONABLE", "LOW", "EXECUTABLE"]:
+        return "chip-green"
+    if label in ["REVIEW", "WATCH", "WATCH CLOSELY", "MEDIUM", "SELECTIVE"]:
+        return "chip-yellow"
+    if label in ["WAIT", "HIGH", "DEFENSIVE"]:
+        return "chip-red"
+    return "chip-blue"
+
+
+def _desk_card(title, main, sub="", chip="", tone="blue"):
+    chip_html = f'<span class="chip chip-{tone}">{chip}</span>' if chip else ""
+    st.markdown(
+        f"""
+<div class="desk-card">
+  <div class="desk-title">{title}</div>
+  <div class="desk-main">{main}</div>
+  {chip_html}
+  <div class="desk-sub">{sub}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def _small_card(title, text, chip="", tone="blue"):
+    chip_html = f'<span class="chip chip-{tone}">{chip}</span>' if chip else ""
+    st.markdown(
+        f"""
+<div class="desk-card-small">
+  <strong>{title}</strong> {chip_html}<br>
+  <span class="muted">{text}</span>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def daily_desk_data():
+    actions = rebalance_actions(holdings_df)
+    opp = get_top_opportunities(3)
+    watch = get_watchlist()
+
+    cash = float(summary.get("cash", 0) or 0)
+    risk_label = summary.get("risk_label", "Low")
+    risk_score = int(summary.get("risk_score", 0) or 0)
+
+    if risk_score >= 75:
+        posture = "Defensive"
+        posture_tone = "red"
+        posture_note = "Protect capital first. Avoid adding to overweight positions."
+    elif not opp.empty and str(opp.iloc[0].get("decision", "")).upper() in ["ACTIONABLE", "WATCH CLOSELY"]:
+        posture = "Selective"
+        posture_tone = "yellow"
+        posture_note = "Only take clean setups with defined stop and acceptable size."
+    else:
+        posture = "Patient"
+        posture_tone = "blue"
+        posture_note = "No need to force trades. Wait for price to come to levels."
+
+    if cash <= 25:
+        execution_note = "Cash is too low for most US stock entries. Treat setups as watchlist only."
+        execution_tone = "red"
+    elif cash < summary.get("total_value", 0) * 0.05:
+        execution_note = "Cash buffer is thin. Use very small size or wait."
+        execution_tone = "yellow"
+    else:
+        execution_note = "Cash allows selective entries if setup quality is high."
+        execution_tone = "green"
+
+    top = None if opp.empty else opp.iloc[0].to_dict()
+    if top:
+        top_text = f"{top.get('ticker')} · {top.get('decision')}"
+        top_sub = f"{top.get('setup_type', '-')} · Technical {int(top.get('technical_score', 0))}/100 · MOS {float(top.get('mos', 0)):.1f}%"
+        top_tone = "green" if top.get("decision") == "ACTIONABLE" else "yellow"
+    else:
+        top_text = "No clean setup"
+        top_sub = "Nothing meets professional setup quality today."
+        top_tone = "blue"
+
+    focus_items = []
+    if top:
+        focus_items.append((top.get("ticker", "-"), f"Watch {top.get('setup_type', '-')} · Decision {top.get('decision', '-')}", top.get("trade_action", "WATCH")))
+    if not actions.empty:
+        add_rows = actions[actions["action"].astype(str).str.contains("Add", case=False, na=False)]
+        for _, row in add_rows.head(1).iterrows():
+            focus_items.append((row["ticker"], f"Below target allocation: {float(row['weight']):.1f}% vs {float(row['target_weight']):.1f}%", "ADD"))
+    if not focus_items:
+        focus_items.append(("Wait", "No high-quality trade to prioritize right now.", "WAIT"))
+
+    ignore_items = []
+    if not actions.empty:
+        stop_rows = actions[actions["action"].astype(str).str.contains("Stop", case=False, na=False)]
+        for _, row in stop_rows.head(2).iterrows():
+            ignore_items.append((row["ticker"], f"Overweight: {float(row['weight']):.1f}% vs target {float(row['target_weight']):.1f}%", "AVOID"))
+    if not watch.empty:
+        bad = watch[watch["decision"].astype(str).isin(["WAIT", "VALUE OK / WAIT SETUP"])]
+        for _, row in bad.head(1).iterrows():
+            ignore_items.append((row["ticker"], f"Setup not ready: {row.get('setup_type', '-')}", "WAIT"))
+    if not ignore_items:
+        ignore_items.append(("Overtrading", "Do not add trades without clear entry, stop, and target.", "AVOID"))
+
+    return {
+        "posture": posture,
+        "posture_tone": posture_tone,
+        "posture_note": posture_note,
+        "execution_note": execution_note,
+        "execution_tone": execution_tone,
+        "top_text": top_text,
+        "top_sub": top_sub,
+        "top_tone": top_tone,
+        "focus_items": focus_items,
+        "ignore_items": ignore_items,
+        "risk_label": risk_label,
+        "risk_score": risk_score,
+        "cash": cash,
+        "opportunities": opp,
+    }
+
+
 with st.sidebar:
     st.markdown(f"### {nav}")
     st.caption("Quick actions")
     st.divider()
 
-    if nav == "Dashboard":
+    if nav == "Daily Desk":
+        desk = daily_desk_data()
+        if st.button("Refresh prices", use_container_width=True):
+            refresh_prices()
+            refresh_watchlist_prices()
+            st.rerun()
+        st.metric("Today", desk["posture"], f'Risk {desk["risk_score"]}/100')
+        st.caption("Use this page first. It tells you what to focus on and what to ignore.")
+
+    elif nav == "Dashboard":
         st.metric("Risk", summary["risk_label"], f'{summary["risk_score"]}/100')
         st.caption("Top actions")
         action_cards(limit=2)
@@ -283,7 +425,64 @@ with st.sidebar:
         st.caption("Streamlit Cloud may reset SQLite after redeploy.")
 
 
-if nav == "Dashboard":
+if nav == "Daily Desk":
+    desk = daily_desk_data()
+    last_sync = get_setting("last_price_sync", "Not synced yet")
+
+    c1, c2, c3 = st.columns([1.25, 1, .9], gap="medium")
+    with c1:
+        st.markdown(
+            f"""
+<div class="desk-hero">
+  <div class="desk-title">Today\'s Priority</div>
+  <div class="desk-main">{desk['posture']}</div>
+  <span class="chip chip-{desk['posture_tone']}">{summary['risk_label']} risk</span>
+  <div class="desk-sub">{desk['posture_note']}</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+    with c2:
+        _desk_card("Best Setup", desk["top_text"], desk["top_sub"], "FOCUS", desk["top_tone"])
+    with c3:
+        _desk_card("Execution", "Cash check", desk["execution_note"], "CAPITAL", desk["execution_tone"])
+
+    f1, f2, f3 = st.columns([1, 1, 1], gap="medium")
+    with f1:
+        st.subheader("Focus Today")
+        for title, text, chip in desk["focus_items"][:3]:
+            tone = "green" if chip in ["READY", "ADD", "ACTIONABLE"] else "yellow" if chip in ["REVIEW", "WATCH"] else "blue"
+            _small_card(title, text, chip, tone)
+    with f2:
+        st.subheader("Do Not Focus")
+        for title, text, chip in desk["ignore_items"][:3]:
+            tone = "red" if chip in ["AVOID", "WAIT"] else "yellow"
+            _small_card(title, text, chip, tone)
+    with f3:
+        st.subheader("Portfolio Rules")
+        _small_card("Risk", f"{summary['risk_label']} · {summary['risk_score']}/100. Reduce concentration before adding similar exposure.", summary['risk_label'].upper(), "red" if summary['risk_label'] == "High" else "yellow" if summary['risk_label'] == "Medium" else "green")
+        _small_card("Position sizing", "Any new trade needs clear entry, stop, target, and minimum 1.5R. Prefer 2R+.", "RULE", "blue")
+        _small_card("No chasing", "If price is extended above MA20/ATR, wait for pullback or confirmed breakout.", "DISCIPLINE", "blue")
+
+    st.subheader("One-screen Watchlist")
+    opp = desk["opportunities"]
+    if opp.empty:
+        st.info("No ranked opportunities. Add tickers to Watchlist first.")
+    else:
+        show = opp[["ticker", "decision", "trade_action", "setup_type", "technical_score", "mos", "score"]].rename(
+            columns={
+                "ticker": "Ticker",
+                "decision": "Decision",
+                "trade_action": "Setup",
+                "setup_type": "Type",
+                "technical_score": "Tech",
+                "mos": "MOS %",
+                "score": "Score",
+            }
+        )
+        st.dataframe(show, use_container_width=True, hide_index=True, height=150)
+
+elif nav == "Dashboard":
     top_left, top_right = st.columns([1, .22])
     with top_left:
         st.caption("Compact portfolio dashboard")
