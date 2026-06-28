@@ -1,14 +1,12 @@
-# AI Portfolio OS 4.1
+# AI Portfolio OS 4.2
 
-Market data and usability polish.
+MVP portfolio dashboard with holdings, transactions, market price refresh, and watchlist buy-zone ranking.
 
-## Update
-Copy files into your existing GitHub repo, then:
-
+## Run locally
 ```powershell
-git add .
-git commit -m "Upgrade to Portfolio OS 4.1 market data polish"
-git push
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Then reboot Streamlit Cloud.
+## Deploy
+Push to GitHub, then reboot Streamlit Cloud.

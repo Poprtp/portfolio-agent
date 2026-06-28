@@ -12,13 +12,8 @@ def pct(value):
         return "0.0%"
 
 
-def risk_label(score):
+def num(value, digits=2):
     try:
-        score = int(score)
+        return f"{float(value):,.{digits}f}"
     except Exception:
-        score = 0
-    if score >= 75:
-        return "High"
-    if score >= 45:
-        return "Medium"
-    return "Low"
+        return "0.00"

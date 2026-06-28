@@ -1,15 +1,14 @@
-from datetime import date
+from datetime import datetime
 
 import pandas as pd
 
-from services.database import connect, set_setting, now_label
+from services.database import connect, set_setting
 from services.market import fetch_price
 
 
 def get_holdings() -> pd.DataFrame:
     with connect() as conn:
-        df = pd.read_sql_query("SELECT * FROM holdings ORDER BY CASE WHEN ticker='CASH' THEN 1 ELSE 0 END, ticker", conn)
-    return df
+        return pd.read_sql_query("SELECT * FROM holdings ORDER BY ticker", conn)
 
 
 def get_enriched_holdings(include_cash: bool = True) -> pd.DataFrame:
@@ -18,24 +17,28 @@ def get_enriched_holdings(include_cash: bool = True) -> pd.DataFrame:
         return df
     for col in ["shares", "avg_cost", "current_price", "target_weight"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+
     df["market_value"] = df["shares"] * df["current_price"]
     df["cost_basis"] = df["shares"] * df["avg_cost"]
     df["gain_loss"] = df["market_value"] - df["cost_basis"]
     df["gain_loss_pct"] = df.apply(
-        lambda r: (r["gain_loss"] / r["cost_basis"] * 100) if r["cost_basis"] else 0, axis=1
+        lambda r: (r["gain_loss"] / r["cost_basis"] * 100) if r["cost_basis"] else 0,
+        axis=1,
     )
     total = df["market_value"].sum()
     df["weight"] = df["market_value"].apply(lambda v: v / total * 100 if total else 0)
+
     if not include_cash:
         df = df[df["ticker"] != "CASH"].copy()
-    round_cols = ["shares", "avg_cost", "current_price", "market_value", "gain_loss", "gain_loss_pct", "weight", "target_weight"]
+
+    round_cols = ["shares", "avg_cost", "current_price", "market_value", "cost_basis", "gain_loss", "gain_loss_pct", "weight", "target_weight"]
     for col in round_cols:
         if col in df.columns:
             df[col] = df[col].round(2)
     return df
 
 
-def risk_profile(score: int) -> str:
+def _risk_label(score: int) -> str:
     if score >= 75:
         return "High"
     if score >= 45:
@@ -56,19 +59,20 @@ def portfolio_summary() -> dict:
             "risk_score": 0,
             "risk_label": "Low",
         }
+
     cash = float(df.loc[df["ticker"] == "CASH", "market_value"].sum())
-    invest = df[(df["ticker"] != "CASH") & (df["shares"] > 0)]
+    invest = df[df["ticker"] != "CASH"]
     total = float(df["market_value"].sum())
     gain = float(invest["gain_loss"].sum()) if not invest.empty else 0
     cost = float(invest["cost_basis"].sum()) if not invest.empty else 0
     cash_weight = cash / total * 100 if total else 0
     max_weight = float(invest["weight"].max()) if not invest.empty else 0
-    position_count = int(len(invest))
+    positions = int(len(invest[invest["shares"] > 0]))
 
-    concentration_penalty = max(0, max_weight - 40) * 0.8
+    concentration_penalty = max(0, max_weight - 35) * 0.85
     cash_penalty = max(0, 8 - cash_weight) * 1.0
-    diversification_penalty = 20 if position_count == 1 else 10 if position_count == 2 else 0
-    risk = min(100, round(25 + concentration_penalty + cash_penalty + diversification_penalty))
+    diversification_penalty = 20 if positions <= 1 else max(0, 5 - positions) * 4
+    risk = min(100, round(20 + concentration_penalty + cash_penalty + diversification_penalty))
 
     return {
         "total_value": round(total, 2),
@@ -76,14 +80,14 @@ def portfolio_summary() -> dict:
         "total_return_pct": round(gain / cost * 100, 2) if cost else 0,
         "cash": round(cash, 2),
         "cash_weight": round(cash_weight, 2),
-        "positions": position_count,
+        "positions": positions,
         "risk_score": int(risk),
-        "risk_label": risk_profile(int(risk)),
+        "risk_label": _risk_label(int(risk)),
     }
 
 
 def upsert_holding(ticker, name, shares, avg_cost, target_weight, asset_type, sector, current_price=None):
-    ticker = ticker.upper().strip()
+    ticker = str(ticker).upper().strip()
     if not current_price:
         current_price = 1 if ticker == "CASH" else avg_cost
     with connect() as conn:
@@ -106,7 +110,7 @@ def upsert_holding(ticker, name, shares, avg_cost, target_weight, asset_type, se
 
 def delete_holding(ticker: str):
     with connect() as conn:
-        conn.execute("DELETE FROM holdings WHERE ticker=? AND ticker!='CASH'", (ticker.upper().strip(),))
+        conn.execute("DELETE FROM holdings WHERE ticker=? AND ticker!='CASH'", (str(ticker).upper().strip(),))
 
 
 def get_transactions(limit: int | None = None) -> pd.DataFrame:
@@ -124,21 +128,25 @@ def _get_holding(conn, ticker):
 def _update_cash(conn, delta):
     row = _get_holding(conn, "CASH")
     if row is None:
-        conn.execute("INSERT INTO holdings (ticker, name, shares, avg_cost, current_price, target_weight, asset_type, sector) VALUES ('CASH','Cash',0,1,1,10,'Cash','Cash')")
+        conn.execute(
+            "INSERT INTO holdings (ticker, name, shares, avg_cost, current_price, target_weight, asset_type, sector) VALUES ('CASH','Cash',0,1,1,10,'Cash','Cash')"
+        )
     conn.execute("UPDATE holdings SET shares = COALESCE(shares,0) + ?, avg_cost=1, current_price=1 WHERE ticker='CASH'", (delta,))
 
 
 def add_transaction(tx_date, ticker, action, shares, price, fees=0.0, note=""):
-    ticker = ticker.upper().strip()
-    action = action.upper().strip()
+    ticker = str(ticker).upper().strip()
+    action = str(action).upper().strip()
     shares = float(shares or 0)
     price = float(price or 0)
     fees = float(fees or 0)
+
     with connect() as conn:
         conn.execute(
             "INSERT INTO transactions (date, ticker, action, shares, price, fees, note) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (str(tx_date), ticker, action, shares, price, fees, note),
         )
+
         if action == "BUY" and ticker:
             cost = shares * price + fees
             row = _get_holding(conn, ticker)
@@ -154,6 +162,7 @@ def add_transaction(tx_date, ticker, action, shares, price, fees=0.0, note=""):
                     (ticker, ticker, shares, price, price),
                 )
             _update_cash(conn, -cost)
+
         elif action == "SELL" and ticker:
             proceeds = shares * price - fees
             row = _get_holding(conn, ticker)
@@ -161,10 +170,13 @@ def add_transaction(tx_date, ticker, action, shares, price, fees=0.0, note=""):
                 new_shares = max(0, float(row[1] or 0) - shares)
                 conn.execute("UPDATE holdings SET shares=?, current_price=? WHERE ticker=?", (new_shares, price, ticker))
             _update_cash(conn, proceeds)
+
         elif action == "CASH_IN":
             _update_cash(conn, price)
+
         elif action == "CASH_OUT":
             _update_cash(conn, -price)
+
         elif action == "DIVIDEND":
             _update_cash(conn, price)
 
@@ -176,14 +188,13 @@ def refresh_prices() -> dict:
     with connect() as conn:
         for _, row in df.iterrows():
             ticker = row["ticker"]
-            price, ok = fetch_price(ticker, row.get("current_price", 0))
+            price, status = fetch_price(ticker, row.get("current_price", 0))
             conn.execute("UPDATE holdings SET current_price=? WHERE ticker=?", (price, ticker))
-            if ok:
+            if status == "updated":
                 updated += 1
-            else:
+            elif status == "fallback":
                 fallback += 1
-    set_setting("last_price_refresh", now_label())
-    set_setting("last_price_status", f"{updated} updated, {fallback} fallback")
+    set_setting("last_price_sync", datetime.now().strftime("%Y-%m-%d %H:%M"))
     return {"updated": updated, "fallback": fallback}
 
 

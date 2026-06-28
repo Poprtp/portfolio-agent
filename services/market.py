@@ -2,17 +2,18 @@ import pandas as pd
 import yfinance as yf
 
 
-def fetch_price(ticker: str, fallback: float = 0.0) -> tuple[float, bool]:
-    ticker = ticker.upper().strip()
+def fetch_price(ticker: str, fallback: float = 0.0) -> tuple[float, str]:
+    ticker = str(ticker).upper().strip()
     if ticker == "CASH":
-        return 1.0, True
+        return 1.0, "cash"
     try:
         data = yf.Ticker(ticker).history(period="5d")
-        if data.empty or data["Close"].dropna().empty:
-            return float(fallback or 0), False
-        return round(float(data["Close"].dropna().iloc[-1]), 2), True
+        if data.empty:
+            return float(fallback or 0), "fallback"
+        price = float(data["Close"].dropna().iloc[-1])
+        return round(price, 2), "updated"
     except Exception:
-        return float(fallback or 0), False
+        return float(fallback or 0), "fallback"
 
 
 def price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
