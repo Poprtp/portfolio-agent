@@ -1,27 +1,33 @@
-from pathlib import Path
-import sqlite3
+from __future__ import annotations
 
-DB_PATH = Path("data/portfolio.db")
+import os
+import sqlite3
+from contextlib import closing
+from datetime import date
+
+DB_PATH = os.path.join("data", "portfolio.db")
 
 
 def get_conn():
-    DB_PATH.parent.mkdir(exist_ok=True)
-    return sqlite3.connect(DB_PATH)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def init_db():
-    with get_conn() as conn:
+    with closing(get_conn()) as conn, conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS holdings (
                 ticker TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
                 shares REAL NOT NULL DEFAULT 0,
                 avg_cost REAL NOT NULL DEFAULT 0,
+                current_price REAL NOT NULL DEFAULT 0,
                 target_weight REAL NOT NULL DEFAULT 0,
                 asset_type TEXT NOT NULL DEFAULT 'Stock',
-                sector TEXT NOT NULL DEFAULT '',
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                sector TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -35,8 +41,7 @@ def init_db():
                 shares REAL NOT NULL DEFAULT 0,
                 price REAL NOT NULL DEFAULT 0,
                 fees REAL NOT NULL DEFAULT 0,
-                note TEXT DEFAULT '',
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                note TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -44,41 +49,40 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS watchlist (
                 ticker TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                current_price REAL NOT NULL DEFAULT 0,
                 fair_value REAL NOT NULL DEFAULT 0,
                 target_buy_price REAL NOT NULL DEFAULT 0,
                 conviction INTEGER NOT NULL DEFAULT 3,
-                note TEXT DEFAULT '',
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                note TEXT NOT NULL DEFAULT ''
             )
             """
         )
-        conn.commit()
 
 
 def seed_default_data():
-    with get_conn() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM holdings").fetchone()[0]
-        if count == 0:
-            conn.executemany(
-                "INSERT OR REPLACE INTO holdings (ticker, name, shares, avg_cost, target_weight, asset_type, sector) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                [
-                    ("QQQI", "NEOS Nasdaq-100 High Income ETF", 132, 52, 35, "ETF", "Income"),
-                    ("CASH", "Cash", 10, 1, 10, "Cash", "Cash"),
-                ],
-            )
+    with closing(get_conn()) as conn, conn:
+        cash_exists = conn.execute("SELECT 1 FROM holdings WHERE ticker='CASH'").fetchone()
+        if not cash_exists:
             conn.execute(
-                "INSERT INTO transactions (date, ticker, action, shares, price, fees, note) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                ("2026-06-28", "QQQI", "BUY", 132, 52, 0, "Initial position"),
+                "INSERT INTO holdings (ticker, name, shares, avg_cost, current_price, target_weight, asset_type, sector) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                ("CASH", "Cash", 10, 1, 1, 10, "Cash", "Cash"),
             )
-        wcount = conn.execute("SELECT COUNT(*) FROM watchlist").fetchone()[0]
-        if wcount == 0:
-            conn.executemany(
-                "INSERT OR REPLACE INTO watchlist (ticker, name, fair_value, target_buy_price, conviction, note) VALUES (?, ?, ?, ?, ?, ?)",
-                [
-                    ("TSM", "Taiwan Semiconductor ADR", 370, 390, 5, "AI infrastructure"),
-                    ("MSFT", "Microsoft", 420, 380, 4, "AI platform"),
-                    ("AVGO", "Broadcom", 400, 350, 4, "AI networking"),
-                ],
+        q_exists = conn.execute("SELECT 1 FROM holdings WHERE ticker='QQQI'").fetchone()
+        if not q_exists:
+            conn.execute(
+                "INSERT INTO holdings (ticker, name, shares, avg_cost, current_price, target_weight, asset_type, sector) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                ("QQQI", "NEOS Nasdaq-100 High Income ETF", 132, 52, 54.69, 35, "ETF", "Income ETF"),
             )
-        conn.commit()
+        for row in [
+            ("TSM", "Taiwan Semiconductor ADR", 370, 390, 5, "Core AI hardware"),
+            ("MSFT", "Microsoft", 430, 400, 4, "AI platform"),
+            ("AVGO", "Broadcom", 380, 340, 4, "AI networking / ASIC"),
+            ("NVDA", "NVIDIA", 190, 165, 3, "AI leader, valuation sensitive"),
+        ]:
+            exists = conn.execute("SELECT 1 FROM watchlist WHERE ticker=?", (row[0],)).fetchone()
+            if not exists:
+                conn.execute(
+                    "INSERT INTO watchlist (ticker, name, fair_value, target_buy_price, conviction, note) VALUES (?, ?, ?, ?, ?, ?)",
+                    row,
+                )

@@ -1,14 +1,21 @@
-# AI Portfolio OS 3.6
+# AI Portfolio OS 3.8
 
-Compact Streamlit portfolio dashboard.
+Core stability update.
 
-## Update
-Copy files into your repo, then:
+## What changed
+- Cash is separated from active holdings on Dashboard.
+- Positions no longer count Cash.
+- BUY / SELL / CASH transactions update holdings and cash.
+- Refresh button updates prices with yfinance and falls back safely.
+- Cleaner rounded numbers and compact dashboard.
 
+## Run locally
 ```powershell
-git add .
-git commit -m "Upgrade to Portfolio OS 3.6 button navigation"
-git push
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Streamlit Cloud will redeploy automatically.
+## Deploy
+Push to GitHub, then reboot the Streamlit app.

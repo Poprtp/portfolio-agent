@@ -1,7 +1,4 @@
 streamlit
 pandas
-numpy
 plotly
 yfinance
-requests
-python-dotenv
