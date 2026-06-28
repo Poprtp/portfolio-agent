@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from datetime import datetime
 
 DB_PATH = Path("data/portfolio.db")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -50,47 +49,30 @@ def init_db() -> None:
             note TEXT DEFAULT ''
         )
     """)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        )
-    """)
     conn.commit()
     conn.close()
 
 
 def seed_default_data() -> None:
     conn = get_connection()
-    cur = conn.cursor()
-    count = cur.execute("SELECT COUNT(*) AS c FROM holdings").fetchone()["c"]
+    count = conn.execute("SELECT COUNT(*) AS c FROM holdings").fetchone()["c"]
     if count == 0:
-        holdings = [
-            ("QQQI", "NEOS Nasdaq-100 High Income ETF", 132, 52, 35, "ETF", "Income"),
-            ("TSM", "Taiwan Semiconductor ADR", 0, 0, 20, "Stock", "Semiconductors"),
-            ("NVDA", "NVIDIA", 0, 0, 15, "Stock", "Semiconductors"),
-            ("AVGO", "Broadcom", 0, 0, 10, "Stock", "Semiconductors"),
-            ("MSFT", "Microsoft", 0, 0, 10, "Stock", "Software"),
-            ("CASH", "Cash", 10, 1, 10, "Cash", "Cash"),
-        ]
-        cur.executemany(
-            "INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector) VALUES (?,?,?,?,?,?,?)",
-            holdings,
+        conn.executemany(
+            "INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector) VALUES(?,?,?,?,?,?,?)",
+            [
+                ("QQQI", "NEOS Nasdaq-100 High Income ETF", 132, 52, 35, "ETF", "Income"),
+                ("CASH", "Cash", 10, 1, 10, "Cash", "Cash"),
+            ],
         )
-        cur.execute("INSERT INTO transactions(date,ticker,action,shares,price,fees,note) VALUES (?,?,?,?,?,?,?)",
-                    (datetime.now().date().isoformat(), "QQQI", "BUY", 132, 52, 0, "Initial position"))
-        watchlist = [
-            ("TSM", "Taiwan Semiconductor ADR", 370, 390, 5, "Core AI infrastructure"),
-            ("MSFT", "Microsoft", 420, 360, 5, "AI platform and cloud"),
-            ("AVGO", "Broadcom", 390, 330, 4, "AI networking and ASIC"),
-            ("NVDA", "NVIDIA", 185, 160, 4, "AI leader, valuation sensitive"),
-            ("GOOGL", "Alphabet", 210, 180, 4, "AI and search platform"),
-            ("AMZN", "Amazon", 240, 200, 4, "AWS and AI infrastructure"),
-            ("META", "Meta Platforms", 760, 650, 4, "AI ads and infrastructure"),
-        ]
-        cur.executemany(
-            "INSERT INTO watchlist(ticker,name,fair_value,target_buy_price,conviction,note) VALUES (?,?,?,?,?,?)",
-            watchlist,
+    wcount = conn.execute("SELECT COUNT(*) AS c FROM watchlist").fetchone()["c"]
+    if wcount == 0:
+        conn.executemany(
+            "INSERT INTO watchlist(ticker,name,fair_value,target_buy_price,conviction,note) VALUES(?,?,?,?,?,?)",
+            [
+                ("TSM", "Taiwan Semiconductor ADR", 370, 390, 5, "Core AI infrastructure"),
+                ("MSFT", "Microsoft", 420, 360, 4, "AI platform"),
+                ("AVGO", "Broadcom", 400, 330, 4, "AI networking and ASIC"),
+            ],
         )
     conn.commit()
     conn.close()

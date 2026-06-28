@@ -1,26 +1,16 @@
-# AI Portfolio OS 3.1
+# AI Portfolio OS 3.2
 
-Portfolio Engine upgrade for Streamlit Cloud.
+Compact dashboard update.
 
-## Features
-- SQLite portfolio database
-- Holdings management
-- Transaction history
-- Buy/sell recording
-- Cash balance
-- Average cost calculation
-- Portfolio allocation
+## Pages
+- Dashboard is now the home page (`app.py`)
+- Portfolio
+- Transactions
 - Watchlist
-- Rebalance actions
-- Price charts
+- Settings
 
-## Run locally
+## Run
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
-## Deploy
-Push all files to GitHub, then reboot the Streamlit app.

@@ -1,6 +1,6 @@
 def usd(value: float) -> str:
-    return f"${value:,.2f}"
+    return f"${float(value):,.2f}"
 
 
 def pct(value: float) -> str:
-    return f"{value:.2f}%"
+    return f"{float(value):.1f}%"
