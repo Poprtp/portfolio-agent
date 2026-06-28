@@ -1,14 +1,14 @@
-# AI Portfolio OS 3.3
+# AI Portfolio OS 3.4
 
-Compact MVP update.
+Compact UI update.
 
 ## Changes
-- Single-file navigation, no Streamlit auto `app` page item
-- Dashboard opens first
-- Cleaner sidebar
-- Compact KPI cards
-- Action cards instead of action table
-- Recent transaction cards
+- Main navigation moved to top tabs
+- Left sidebar is now contextual for quick actions
+- Dashboard sidebar: refresh + action summary
+- Portfolio sidebar: add/edit/delete holdings
+- Transactions sidebar: add transaction
+- Watchlist sidebar: add/edit/delete watchlist
 
 ## Run
 ```powershell

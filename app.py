@@ -3,6 +3,7 @@ from datetime import date
 import streamlit as st
 
 from services.database import init_db, seed_default_data
+from services.market import get_price_history
 from services.portfolio import (
     add_transaction,
     delete_holding,
@@ -13,7 +14,7 @@ from services.portfolio import (
     upsert_holding,
 )
 from services.watchlist import delete_watchlist, get_watchlist, upsert_watchlist
-from utils.charts import allocation_chart
+from utils.charts import allocation_chart, price_chart
 from utils.formatting import pct, usd
 
 st.set_page_config(page_title="AI Portfolio OS", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
@@ -23,44 +24,45 @@ seed_default_data()
 st.markdown(
     """
 <style>
-.block-container {padding: 1.1rem 1.6rem 1rem 1.6rem; max-width: 1180px;}
-h1 {font-size: 1.55rem !important; margin-bottom: .05rem !important; letter-spacing: -0.02em;}
-h2 {font-size: 1.1rem !important; margin-top: .65rem !important; margin-bottom: .35rem !important;}
-h3 {font-size: 1rem !important; margin-top: .5rem !important;}
-[data-testid="stSidebar"] {background: #111827;}
-[data-testid="stSidebar"] .block-container {padding-top: 1.1rem;}
-[data-testid="stMetric"] {background:#111827; border:1px solid #1f2937; border-radius:14px; padding:12px 14px;}
+.block-container {padding: 1.0rem 1.45rem 1.2rem 1.45rem; max-width: 1220px;}
+h1 {font-size: 1.45rem !important; margin: .1rem 0 .15rem 0 !important; letter-spacing: -0.03em;}
+h2 {font-size: 1.0rem !important; margin: .7rem 0 .35rem 0 !important;}
+h3 {font-size: .95rem !important; margin: .55rem 0 .25rem 0 !important;}
+[data-testid="stSidebar"] {background: #0f172a; border-right: 1px solid #1f2937;}
+[data-testid="stSidebar"] .block-container {padding-top: 1.15rem;}
+[data-testid="stMetric"] {background:#111827; border:1px solid #1f2937; border-radius:14px; padding:11px 13px;}
 [data-testid="stMetricLabel"] {font-size:.72rem; color:#9ca3af;}
-[data-testid="stMetricValue"] {font-size:1.28rem;}
+[data-testid="stMetricValue"] {font-size:1.18rem;}
 .stDataFrame {border:1px solid #1f2937; border-radius:12px; overflow:hidden;}
+[data-testid="stRadio"] > div {gap: .35rem;}
+[data-testid="stRadio"] label {background:#111827; border:1px solid #1f2937; border-radius:999px; padding:.18rem .7rem; min-height:2.1rem;}
+[data-testid="stRadio"] label:hover {border-color:#60a5fa;}
 .small-muted {color:#9ca3af; font-size:.78rem;}
 .action-card {background:#111827; border:1px solid #1f2937; border-radius:12px; padding:10px 12px; margin-bottom:8px;}
-.action-card strong {font-size:.9rem;}
-.green {color:#22c55e;} .red {color:#ef4444;} .muted {color:#9ca3af;}
-hr {border-color:#1f2937; margin:.9rem 0;}
+.action-card strong {font-size:.88rem;}
+.green {color:#22c55e;} .red {color:#ef4444;} .muted {color:#9ca3af;} .blue {color:#60a5fa;}
+hr {border-color:#1f2937; margin:.8rem 0;}
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-# ---------- sidebar ----------
-st.sidebar.markdown("### AI Portfolio")
-page = st.sidebar.radio(
-    "Navigation",
-    ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Settings"],
-    label_visibility="collapsed",
-)
-st.sidebar.divider()
-if st.sidebar.button("Refresh data", use_container_width=True):
-    st.cache_data.clear()
-    st.rerun()
-st.sidebar.caption("MVP: portfolio, transactions, watchlist, dashboard.")
-
-# ---------- shared data ----------
+# ---------- data ----------
 df = get_enriched_holdings()
 summary = portfolio_summary()
 
+# ---------- top navigation ----------
+st.title("AI Portfolio OS")
+nav = st.radio(
+    "Navigation",
+    ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Settings"],
+    horizontal=True,
+    label_visibility="collapsed",
+)
+st.caption("Compact portfolio dashboard")
 
+
+# ---------- helpers ----------
 def kpi_row():
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Portfolio", usd(summary["total_value"]))
@@ -69,41 +71,45 @@ def kpi_row():
     c4.metric("Positions", str(summary["positions"]), f'Risk {summary["risk_score"]}/100')
 
 
-def compact_holdings_table(height=270):
+def compact_holdings_table(height=260, full=False):
+    if df.empty:
+        st.info("No holdings yet.")
+        return
     cols = ["ticker", "shares", "avg_cost", "current_price", "market_value", "gain_loss_pct", "weight"]
-    show = df[cols].copy() if not df.empty else df
-    if not show.empty:
-        show = show.rename(
-            columns={
-                "ticker": "Ticker",
-                "shares": "Shares",
-                "avg_cost": "Avg",
-                "current_price": "Price",
-                "market_value": "Value",
-                "gain_loss_pct": "P/L %",
-                "weight": "Weight %",
-            }
-        )
+    if full:
+        cols = ["ticker", "name", "shares", "avg_cost", "current_price", "market_value", "gain_loss_pct", "weight", "target_weight", "sector"]
+    show = df[cols].copy()
+    show = show.rename(
+        columns={
+            "ticker": "Ticker",
+            "name": "Name",
+            "shares": "Shares",
+            "avg_cost": "Avg",
+            "current_price": "Price",
+            "market_value": "Value",
+            "gain_loss_pct": "P/L %",
+            "weight": "Weight %",
+            "target_weight": "Target %",
+            "sector": "Sector",
+        }
+    )
     st.dataframe(show, use_container_width=True, hide_index=True, height=height)
 
 
-def action_cards():
+def action_cards(limit=5):
     actions = rebalance_actions(df)
     if actions.empty:
         st.info("No actions yet.")
         return
-    for _, row in actions.head(5).iterrows():
+    for _, row in actions.head(limit).iterrows():
         ticker = row["ticker"]
         action = row["action"]
         drift = float(row["weight"] - row["target_weight"])
-        badge = "HOLD"
-        color = "muted"
+        badge, color = "HOLD", "muted"
         if "Add" in action:
-            badge = "ADD"
-            color = "green"
+            badge, color = "ADD", "green"
         elif "Stop" in action:
-            badge = "STOP"
-            color = "red"
+            badge, color = "STOP", "red"
         st.markdown(
             f"""
 <div class="action-card">
@@ -115,8 +121,8 @@ def action_cards():
         )
 
 
-def recent_transaction_cards():
-    tx = get_transactions(limit=5)
+def recent_transaction_cards(limit=5):
+    tx = get_transactions(limit=limit)
     if tx.empty:
         st.info("No transactions yet.")
         return
@@ -133,16 +139,95 @@ def recent_transaction_cards():
         )
 
 
-# ---------- pages ----------
-if page == "Dashboard":
-    st.title("Dashboard")
-    st.caption("Compact portfolio overview")
-    kpi_row()
+# ---------- contextual sidebar ----------
+with st.sidebar:
+    st.markdown(f"### {nav}")
+    st.caption("Quick actions")
+    st.divider()
 
+    if nav == "Dashboard":
+        if st.button("Refresh prices", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+        st.metric("Risk", f'{summary["risk_score"]}/100')
+        st.caption("Top actions")
+        action_cards(limit=3)
+
+    elif nav == "Portfolio":
+        st.caption("Add / Edit Holding")
+        with st.form("side_holding_form"):
+            ticker = st.text_input("Ticker", value="TSM").upper().strip()
+            name = st.text_input("Name", value="Taiwan Semiconductor ADR")
+            shares = st.number_input("Shares", min_value=0.0, value=0.0, step=1.0)
+            avg_cost = st.number_input("Average Cost", min_value=0.0, value=0.0, step=1.0)
+            target_weight = st.number_input("Target %", min_value=0.0, max_value=100.0, value=10.0, step=1.0)
+            sector = st.text_input("Sector", value="Semiconductors")
+            asset_type = st.selectbox("Type", ["Stock", "ETF", "Cash", "Crypto", "Other"])
+            if st.form_submit_button("Save holding", use_container_width=True) and ticker:
+                upsert_holding(ticker, name, shares, avg_cost, target_weight, asset_type, sector)
+                st.success(f"Saved {ticker}")
+                st.rerun()
+
+        candidates = [t for t in df["ticker"].tolist() if t != "CASH"] if not df.empty else []
+        if candidates:
+            st.divider()
+            del_ticker = st.selectbox("Delete", candidates)
+            if st.button("Delete holding", use_container_width=True):
+                delete_holding(del_ticker)
+                st.rerun()
+
+    elif nav == "Transactions":
+        st.caption("Record Transaction")
+        with st.form("side_tx_form"):
+            tx_date = st.date_input("Date", value=date.today())
+            ticker = st.text_input("Ticker", value="TSM").upper().strip()
+            action = st.selectbox("Action", ["BUY", "SELL", "DIVIDEND", "CASH_IN", "CASH_OUT"])
+            shares = st.number_input("Shares", min_value=0.0, value=0.0, step=1.0)
+            price = st.number_input("Price / Amount", min_value=0.0, value=0.0, step=1.0)
+            fees = st.number_input("Fees", min_value=0.0, value=0.0, step=0.1)
+            note = st.text_input("Note", value="")
+            if st.form_submit_button("Save transaction", use_container_width=True) and ticker:
+                add_transaction(tx_date, ticker, action, shares, price, fees, note)
+                st.success("Saved")
+                st.rerun()
+
+    elif nav == "Watchlist":
+        st.caption("Add / Edit Watchlist")
+        with st.form("side_watch_form"):
+            ticker = st.text_input("Ticker", value="TSM").upper().strip()
+            name = st.text_input("Name", value="Taiwan Semiconductor ADR")
+            conviction = st.slider("Conviction", 1, 5, 4)
+            fair_value = st.number_input("Fair Value", min_value=0.0, value=370.0, step=1.0)
+            target_buy = st.number_input("Buy Zone", min_value=0.0, value=390.0, step=1.0)
+            note = st.text_input("Note", value="")
+            if st.form_submit_button("Save watchlist", use_container_width=True) and ticker:
+                upsert_watchlist(ticker, name, fair_value, target_buy, conviction, note)
+                st.success(f"Saved {ticker}")
+                st.rerun()
+
+        wdf = get_watchlist()
+        if not wdf.empty:
+            st.divider()
+            del_ticker = st.selectbox("Delete", wdf["ticker"].tolist())
+            if st.button("Delete watchlist", use_container_width=True):
+                delete_watchlist(del_ticker)
+                st.rerun()
+
+    elif nav == "Settings":
+        if st.button("Initialize / repair database", use_container_width=True):
+            init_db()
+            seed_default_data()
+            st.success("Database initialized")
+        st.info("On Streamlit Cloud, database storage may reset after redeploy. Keep important records backed up.")
+
+
+# ---------- pages ----------
+if nav == "Dashboard":
+    kpi_row()
     left, right = st.columns([1.35, 1], gap="medium")
     with left:
         st.subheader("Holdings")
-        compact_holdings_table(265)
+        compact_holdings_table(245)
     with right:
         st.subheader("Allocation")
         st.plotly_chart(allocation_chart(df), use_container_width=True)
@@ -155,94 +240,35 @@ if page == "Dashboard":
         st.subheader("Recent Transactions")
         recent_transaction_cards()
 
-elif page == "Portfolio":
-    st.title("Portfolio")
-    st.caption("Edit current holdings")
-    compact_holdings_table(320)
+elif nav == "Portfolio":
+    st.subheader("Portfolio")
+    compact_holdings_table(430, full=True)
 
-    st.subheader("Add / Edit Holding")
-    with st.form("holding_form"):
-        c1, c2, c3 = st.columns([1, 2, 1])
-        ticker = c1.text_input("Ticker", value="TSM").upper().strip()
-        name = c2.text_input("Name", value="Taiwan Semiconductor ADR")
-        asset_type = c3.selectbox("Type", ["Stock", "ETF", "Cash", "Crypto", "Other"])
-        c4, c5, c6 = st.columns(3)
-        shares = c4.number_input("Shares", min_value=0.0, value=0.0, step=1.0)
-        avg_cost = c5.number_input("Average Cost", min_value=0.0, value=0.0, step=1.0)
-        target_weight = c6.number_input("Target Weight %", min_value=0.0, max_value=100.0, value=10.0, step=1.0)
-        sector = st.text_input("Sector", value="Semiconductors")
-        if st.form_submit_button("Save holding", use_container_width=True) and ticker:
-            upsert_holding(ticker, name, shares, avg_cost, target_weight, asset_type, sector)
-            st.success(f"Saved {ticker}")
-            st.rerun()
+elif nav == "Transactions":
+    st.subheader("Transactions")
+    st.dataframe(get_transactions(), use_container_width=True, hide_index=True, height=470)
 
-    if not df.empty:
-        st.subheader("Delete Holding")
-        candidates = [t for t in df["ticker"].tolist() if t != "CASH"]
-        if candidates:
-            del_ticker = st.selectbox("Ticker", candidates)
-            if st.button("Delete", type="secondary"):
-                delete_holding(del_ticker)
-                st.warning(f"Deleted {del_ticker}")
-                st.rerun()
-
-elif page == "Transactions":
-    st.title("Transactions")
-    st.caption("Record buys, sells, dividends, and cash movements")
-    with st.form("tx_form"):
-        c1, c2, c3 = st.columns(3)
-        tx_date = c1.date_input("Date", value=date.today())
-        ticker = c2.text_input("Ticker", value="TSM").upper().strip()
-        action = c3.selectbox("Action", ["BUY", "SELL", "DIVIDEND", "CASH_IN", "CASH_OUT"])
-        c4, c5, c6 = st.columns(3)
-        shares = c4.number_input("Shares", min_value=0.0, value=0.0, step=1.0)
-        price = c5.number_input("Price / Cash Amount", min_value=0.0, value=0.0, step=1.0)
-        fees = c6.number_input("Fees", min_value=0.0, value=0.0, step=0.1)
-        note = st.text_input("Note", value="")
-        if st.form_submit_button("Save transaction", use_container_width=True) and ticker:
-            add_transaction(tx_date, ticker, action, shares, price, fees, note)
-            st.success("Saved.")
-            st.rerun()
-
-    st.subheader("History")
-    st.dataframe(get_transactions(), use_container_width=True, hide_index=True, height=360)
-
-elif page == "Watchlist":
-    st.title("Watchlist")
-    st.caption("Simple ranking by conviction, fair value, and buy zone")
+elif nav == "Watchlist":
+    st.subheader("Watchlist")
     wdf = get_watchlist()
-    if not wdf.empty:
-        keep = ["ticker", "name", "current_price", "fair_value", "target_buy_price", "conviction", "score"]
-        st.dataframe(wdf[keep], use_container_width=True, hide_index=True, height=300)
-    else:
+    if wdf.empty:
         st.info("No watchlist yet.")
+    else:
+        keep = ["ticker", "name", "current_price", "fair_value", "target_buy_price", "conviction", "score"]
+        show = wdf[keep].rename(
+            columns={
+                "ticker": "Ticker",
+                "name": "Name",
+                "current_price": "Price",
+                "fair_value": "Fair Value",
+                "target_buy_price": "Buy Zone",
+                "conviction": "Conviction",
+                "score": "Score",
+            }
+        )
+        st.dataframe(show, use_container_width=True, hide_index=True, height=430)
 
-    st.subheader("Add / Edit")
-    with st.form("watch_form"):
-        c1, c2, c3 = st.columns(3)
-        ticker = c1.text_input("Ticker", value="TSM").upper().strip()
-        name = c2.text_input("Name", value="Taiwan Semiconductor ADR")
-        conviction = c3.slider("Conviction", 1, 5, 4)
-        c4, c5 = st.columns(2)
-        fair_value = c4.number_input("Fair Value", min_value=0.0, value=370.0, step=1.0)
-        target_buy = c5.number_input("Buy Zone", min_value=0.0, value=390.0, step=1.0)
-        note = st.text_input("Note", value="")
-        if st.form_submit_button("Save", use_container_width=True) and ticker:
-            upsert_watchlist(ticker, name, fair_value, target_buy, conviction, note)
-            st.success(f"Saved {ticker}")
-            st.rerun()
-
-    if not wdf.empty:
-        del_ticker = st.selectbox("Delete ticker", wdf["ticker"].tolist())
-        if st.button("Delete", type="secondary"):
-            delete_watchlist(del_ticker)
-            st.rerun()
-
-elif page == "Settings":
-    st.title("Settings")
-    st.caption("Database and deployment")
-    st.info("Storage on Streamlit Community Cloud may reset after redeploy. Keep important records backed up.")
-    if st.button("Initialize / repair database"):
-        init_db()
-        seed_default_data()
-        st.success("Database initialized.")
+elif nav == "Settings":
+    st.subheader("Settings")
+    st.write("Use this page for database maintenance and deployment notes.")
+    st.code("streamlit run app.py")
