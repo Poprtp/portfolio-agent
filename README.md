@@ -1,14 +1,14 @@
-# AI Portfolio OS 3.5
+# AI Portfolio OS 3.6
 
-Compact Streamlit portfolio dashboard with custom top button navigation and contextual sidebar actions.
+Compact Streamlit portfolio dashboard.
 
-## Run locally
+## Update
+Copy files into your repo, then:
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
+```powershell
+git add .
+git commit -m "Upgrade to Portfolio OS 3.6 button navigation"
+git push
 ```
 
-## Deploy
-
-Push to GitHub and reboot the Streamlit Community Cloud app.
+Streamlit Cloud will redeploy automatically.

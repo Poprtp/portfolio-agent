@@ -1,138 +1,120 @@
-from __future__ import annotations
-
 from datetime import date
 import pandas as pd
-from services.database import get_connection
-from services.market import enrich_prices
+
+from services.database import get_conn
+from services.market import get_current_price
 
 
 def get_holdings() -> pd.DataFrame:
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM holdings ORDER BY CASE WHEN ticker='CASH' THEN 1 ELSE 0 END, ticker", conn)
-    conn.close()
-    return df
+    with get_conn() as conn:
+        return pd.read_sql_query("SELECT * FROM holdings ORDER BY ticker", conn)
+
+
+def upsert_holding(ticker, name, shares, avg_cost, target_weight, asset_type, sector):
+    ticker = ticker.upper().strip()
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO holdings (ticker, name, shares, avg_cost, target_weight, asset_type, sector, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(ticker) DO UPDATE SET
+                name=excluded.name, shares=excluded.shares, avg_cost=excluded.avg_cost,
+                target_weight=excluded.target_weight, asset_type=excluded.asset_type,
+                sector=excluded.sector, updated_at=CURRENT_TIMESTAMP
+            """,
+            (ticker, name, shares, avg_cost, target_weight, asset_type, sector),
+        )
+        conn.commit()
+
+
+def delete_holding(ticker):
+    if ticker.upper() == "CASH":
+        return
+    with get_conn() as conn:
+        conn.execute("DELETE FROM holdings WHERE ticker = ?", (ticker.upper(),))
+        conn.commit()
 
 
 def get_enriched_holdings() -> pd.DataFrame:
-    return enrich_prices(get_holdings())
-
-
-def upsert_holding(ticker: str, name: str, shares: float, avg_cost: float, target_weight: float, asset_type: str, sector: str) -> None:
-    conn = get_connection()
-    conn.execute(
-        """
-        INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector)
-        VALUES(?,?,?,?,?,?,?)
-        ON CONFLICT(ticker) DO UPDATE SET
-            name=excluded.name,
-            shares=excluded.shares,
-            avg_cost=excluded.avg_cost,
-            target_weight=excluded.target_weight,
-            asset_type=excluded.asset_type,
-            sector=excluded.sector
-        """,
-        (ticker.upper(), name, shares, avg_cost, target_weight, asset_type, sector),
-    )
-    conn.commit()
-    conn.close()
-
-
-def delete_holding(ticker: str) -> None:
-    if ticker.upper() == "CASH":
-        return
-    conn = get_connection()
-    conn.execute("DELETE FROM holdings WHERE ticker=?", (ticker.upper(),))
-    conn.commit()
-    conn.close()
-
-
-def get_transactions(limit: int | None = None) -> pd.DataFrame:
-    conn = get_connection()
-    query = "SELECT * FROM transactions ORDER BY date DESC, id DESC"
-    if limit:
-        query += f" LIMIT {int(limit)}"
-    df = pd.read_sql_query(query, conn)
-    conn.close()
+    df = get_holdings()
+    if df.empty:
+        return df
+    df["current_price"] = df["ticker"].apply(get_current_price)
+    df["market_value"] = df["shares"] * df["current_price"]
+    invested = df["shares"] * df["avg_cost"]
+    df["gain_loss"] = df["market_value"] - invested
+    df["gain_loss_pct"] = (df["gain_loss"] / invested.replace(0, pd.NA) * 100).fillna(0)
+    total = float(df["market_value"].sum())
+    df["weight"] = (df["market_value"] / total * 100).fillna(0) if total else 0
     return df
-
-
-def add_transaction(tx_date: date, ticker: str, action: str, shares: float, price: float, fees: float, note: str = "") -> None:
-    ticker = ticker.upper().strip()
-    action = action.upper().strip()
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO transactions(date,ticker,action,shares,price,fees,note) VALUES(?,?,?,?,?,?,?)",
-        (tx_date.isoformat(), ticker, action, shares, price, fees, note),
-    )
-    row = conn.execute("SELECT * FROM holdings WHERE ticker=?", (ticker,)).fetchone()
-    if action == "BUY":
-        if row:
-            old_shares = float(row["shares"])
-            old_cost = float(row["avg_cost"])
-            new_shares = old_shares + shares
-            new_avg = ((old_shares * old_cost) + (shares * price) + fees) / new_shares if new_shares else 0
-            conn.execute("UPDATE holdings SET shares=?, avg_cost=? WHERE ticker=?", (new_shares, new_avg, ticker))
-        else:
-            conn.execute(
-                "INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector) VALUES(?,?,?,?,?,?,?)",
-                (ticker, ticker, shares, price, 0, "Stock", "Unknown"),
-            )
-    elif action == "SELL" and row:
-        old_shares = float(row["shares"])
-        conn.execute("UPDATE holdings SET shares=? WHERE ticker=?", (max(old_shares - shares, 0), ticker))
-    elif action == "CASH_IN":
-        conn.execute("INSERT INTO holdings(ticker,name,shares,avg_cost,target_weight,asset_type,sector) VALUES('CASH','Cash',0,1,10,'Cash','Cash') ON CONFLICT(ticker) DO NOTHING")
-        conn.execute("UPDATE holdings SET shares=shares+? WHERE ticker='CASH'", (price,))
-    elif action == "CASH_OUT":
-        conn.execute("UPDATE holdings SET shares=max(shares-?,0) WHERE ticker='CASH'", (price,))
-    conn.commit()
-    conn.close()
 
 
 def portfolio_summary() -> dict:
     df = get_enriched_holdings()
-    total = float(df["market_value"].sum()) if not df.empty else 0.0
-    gain = float(df["gain_loss"].sum()) if not df.empty else 0.0
-    cash = float(df.loc[df["ticker"] == "CASH", "market_value"].sum()) if not df.empty else 0.0
+    if df.empty:
+        return {"total_value": 0, "total_gain_loss": 0, "total_return_pct": 0, "cash": 0, "cash_weight": 0, "positions": 0, "risk_score": 0}
+    total = float(df["market_value"].sum())
+    invested = float((df["shares"] * df["avg_cost"]).sum())
+    gain = total - invested
+    cash = float(df.loc[df["ticker"] == "CASH", "market_value"].sum())
+    qmax = float(df["weight"].max()) if not df.empty else 0
+    risk = min(100, int(25 + max(0, qmax - 25)))
     return {
         "total_value": total,
         "total_gain_loss": gain,
-        "total_return_pct": (gain / (total - gain) * 100) if (total - gain) > 0 else 0,
+        "total_return_pct": (gain / invested * 100) if invested else 0,
         "cash": cash,
         "cash_weight": (cash / total * 100) if total else 0,
-        "positions": int(((df["shares"] > 0) & (df["ticker"] != "CASH")).sum()) if not df.empty else 0,
-        "risk_score": calculate_risk_score(df),
+        "positions": int((df[(df["ticker"] != "CASH") & (df["shares"] > 0)]).shape[0]),
+        "risk_score": risk,
     }
-
-
-def calculate_risk_score(df: pd.DataFrame) -> int:
-    if df.empty:
-        return 0
-    score = 20
-    max_weight = float(df.loc[df["ticker"] != "CASH", "weight"].max()) if not df.loc[df["ticker"] != "CASH"].empty else 0
-    if max_weight > 70:
-        score += 45
-    elif max_weight > 50:
-        score += 30
-    elif max_weight > 35:
-        score += 20
-    elif max_weight > 20:
-        score += 10
-    cash_weight = float(df.loc[df["ticker"] == "CASH", "weight"].sum())
-    if cash_weight < 5:
-        score += 15
-    return min(int(score), 100)
 
 
 def rebalance_actions(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
-        return pd.DataFrame()
-    out = df[["ticker", "weight", "target_weight", "drift", "market_value"]].copy()
-    def action(drift: float) -> str:
+        return pd.DataFrame(columns=["ticker", "weight", "target_weight", "action"])
+    rows = []
+    for _, row in df.iterrows():
+        drift = float(row["weight"] - row["target_weight"])
         if drift > 10:
-            return "Stop buying / trim later"
-        if drift < -10:
-            return "Add gradually"
-        return "Hold"
-    out["action"] = out["drift"].apply(action)
-    return out.sort_values("drift", ascending=False)
+            action = "Stop buying / trim later"
+        elif drift < -5:
+            action = "Add gradually"
+        else:
+            action = "Hold"
+        rows.append({"ticker": row["ticker"], "weight": row["weight"], "target_weight": row["target_weight"], "action": action})
+    return pd.DataFrame(rows).sort_values("ticker")
+
+
+def add_transaction(tx_date, ticker, action, shares, price, fees=0, note=""):
+    ticker = ticker.upper().strip()
+    action = action.upper().strip()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO transactions (date, ticker, action, shares, price, fees, note) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (str(tx_date), ticker, action, shares, price, fees, note),
+        )
+        if action == "BUY":
+            h = conn.execute("SELECT shares, avg_cost, name, target_weight, asset_type, sector FROM holdings WHERE ticker=?", (ticker,)).fetchone()
+            if h:
+                old_shares, old_avg, name, target_weight, asset_type, sector = h
+                new_shares = float(old_shares) + float(shares)
+                new_avg = ((float(old_shares) * float(old_avg)) + (float(shares) * float(price)) + float(fees)) / new_shares if new_shares else 0
+                conn.execute("UPDATE holdings SET shares=?, avg_cost=?, updated_at=CURRENT_TIMESTAMP WHERE ticker=?", (new_shares, new_avg, ticker))
+            else:
+                conn.execute("INSERT INTO holdings (ticker, name, shares, avg_cost, target_weight, asset_type, sector) VALUES (?, ?, ?, ?, ?, ?, ?)", (ticker, ticker, shares, price, 10, "Stock", ""))
+        elif action == "SELL":
+            conn.execute("UPDATE holdings SET shares = MAX(shares - ?, 0), updated_at=CURRENT_TIMESTAMP WHERE ticker=?", (shares, ticker))
+        elif action == "CASH_IN":
+            conn.execute("UPDATE holdings SET shares = shares + ?, updated_at=CURRENT_TIMESTAMP WHERE ticker='CASH'", (price,))
+        elif action == "CASH_OUT":
+            conn.execute("UPDATE holdings SET shares = MAX(shares - ?, 0), updated_at=CURRENT_TIMESTAMP WHERE ticker='CASH'", (price,))
+        conn.commit()
+
+
+def get_transactions(limit=None) -> pd.DataFrame:
+    sql = "SELECT date, ticker, action, shares, price, fees, note FROM transactions ORDER BY date DESC, id DESC"
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+    with get_conn() as conn:
+        return pd.read_sql_query(sql, conn)

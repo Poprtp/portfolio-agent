@@ -24,26 +24,23 @@ seed_default_data()
 st.markdown(
     """
 <style>
-.block-container {padding: 1.0rem 1.45rem 1.2rem 1.45rem; max-width: 1220px;}
-h1 {font-size: 1.45rem !important; margin: .1rem 0 .15rem 0 !important; letter-spacing: -0.03em;}
+.block-container {padding: .85rem 1.15rem 1rem 1.15rem; max-width: 1180px;}
+h1 {font-size: 1.35rem !important; margin: .05rem 0 .25rem 0 !important; letter-spacing: -0.03em;}
 h2 {font-size: 1.0rem !important; margin: .7rem 0 .35rem 0 !important;}
 h3 {font-size: .95rem !important; margin: .55rem 0 .25rem 0 !important;}
-[data-testid="stSidebar"] {background: #0f172a; border-right: 1px solid #1f2937;}
-[data-testid="stSidebar"] .block-container {padding-top: 1.15rem;}
-[data-testid="stMetric"] {background:#111827; border:1px solid #1f2937; border-radius:14px; padding:11px 13px;}
-[data-testid="stMetricLabel"] {font-size:.72rem; color:#9ca3af;}
-[data-testid="stMetricValue"] {font-size:1.18rem;}
-.stDataFrame {border:1px solid #1f2937; border-radius:12px; overflow:hidden;}
-/* Custom top navigation */
-.topnav {display:flex; gap:.55rem; flex-wrap:wrap; margin:.45rem 0 .8rem 0;}
-.topnav a {text-decoration:none; color:#e5e7eb; background:#111827; border:1px solid #1f2937; border-radius:10px; padding:.48rem .78rem; font-size:.86rem; font-weight:600; line-height:1; display:inline-block;}
-.topnav a:hover {border-color:#60a5fa; color:#ffffff; background:#172033;}
-.topnav a.active {background:#2563eb; border-color:#60a5fa; color:white;}
+[data-testid="stSidebar"] {background: #0f172a; border-right: 1px solid #1f2937; min-width: 220px !important; max-width: 240px !important;}
+[data-testid="stSidebar"] .block-container {padding-top: 1.05rem; padding-left: 1rem; padding-right: 1rem;}
+[data-testid="stMetric"] {background:#111827; border:1px solid #1f2937; border-radius:13px; padding:10px 12px;}
+[data-testid="stMetricLabel"] {font-size:.70rem; color:#9ca3af;}
+[data-testid="stMetricValue"] {font-size:1.08rem;}
+.stDataFrame {border:1px solid #1f2937; border-radius:11px; overflow:hidden;}
 .small-muted {color:#9ca3af; font-size:.78rem;}
 .action-card {background:#111827; border:1px solid #1f2937; border-radius:12px; padding:10px 12px; margin-bottom:8px;}
-.action-card strong {font-size:.88rem;}
+.action-card strong {font-size:.86rem;}
 .green {color:#22c55e;} .red {color:#ef4444;} .muted {color:#9ca3af;} .blue {color:#60a5fa;}
 hr {border-color:#1f2937; margin:.8rem 0;}
+/* Button navigation */
+div[data-testid="stHorizontalBlock"] button {border-radius: 10px !important; font-weight: 650 !important;}
 </style>
 """,
     unsafe_allow_html=True,
@@ -53,19 +50,21 @@ hr {border-color:#1f2937; margin:.8rem 0;}
 df = get_enriched_holdings()
 summary = portfolio_summary()
 
-# ---------- top navigation ----------
+# ---------- navigation ----------
 PAGES = ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Settings"]
-nav = st.query_params.get("page", "Dashboard")
-if nav not in PAGES:
-    nav = "Dashboard"
+if "nav" not in st.session_state:
+    st.session_state.nav = "Dashboard"
+if st.session_state.nav not in PAGES:
+    st.session_state.nav = "Dashboard"
 
 st.title("AI Portfolio OS")
-nav_html = '<div class="topnav">'
-for page in PAGES:
-    active = " active" if page == nav else ""
-    nav_html += f'<a class="{active}" href="?page={page}">{page}</a>'
-nav_html += '</div>'
-st.markdown(nav_html, unsafe_allow_html=True)
+nav_cols = st.columns([.9, .9, 1.15, .95, .9, 4.1], gap="small")
+for i, page in enumerate(PAGES):
+    button_type = "primary" if st.session_state.nav == page else "secondary"
+    if nav_cols[i].button(page, type=button_type, use_container_width=True):
+        st.session_state.nav = page
+        st.rerun()
+nav = st.session_state.nav
 st.caption("Compact portfolio dashboard")
 
 
@@ -78,7 +77,7 @@ def kpi_row():
     c4.metric("Positions", str(summary["positions"]), f'Risk {summary["risk_score"]}/100')
 
 
-def compact_holdings_table(height=260, full=False):
+def compact_holdings_table(height=245, full=False):
     if df.empty:
         st.info("No holdings yet.")
         return
@@ -153,13 +152,9 @@ with st.sidebar:
     st.divider()
 
     if nav == "Dashboard":
-        top_left, top_right = st.columns([1, 0.18])
-        with top_right:
-            if st.button("Refresh prices", use_container_width=True):
-                st.cache_data.clear()
-                st.rerun()
-
-        kpi_row()
+        st.metric("Risk", f'{summary["risk_score"]}/100')
+        st.caption("Top actions")
+        action_cards(limit=3)
 
     elif nav == "Portfolio":
         st.caption("Add / Edit Holding")
@@ -231,11 +226,17 @@ with st.sidebar:
 
 # ---------- pages ----------
 if nav == "Dashboard":
+    top_left, top_right = st.columns([1, 0.18])
+    with top_right:
+        if st.button("Refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
     kpi_row()
-    left, right = st.columns([1.35, 1], gap="medium")
+    left, right = st.columns([1.45, 1], gap="medium")
     with left:
         st.subheader("Holdings")
-        compact_holdings_table(245)
+        compact_holdings_table(230)
     with right:
         st.subheader("Allocation")
         st.plotly_chart(allocation_chart(df), use_container_width=True)
