@@ -34,9 +34,11 @@ h3 {font-size: .95rem !important; margin: .55rem 0 .25rem 0 !important;}
 [data-testid="stMetricLabel"] {font-size:.72rem; color:#9ca3af;}
 [data-testid="stMetricValue"] {font-size:1.18rem;}
 .stDataFrame {border:1px solid #1f2937; border-radius:12px; overflow:hidden;}
-[data-testid="stRadio"] > div {gap: .35rem;}
-[data-testid="stRadio"] label {background:#111827; border:1px solid #1f2937; border-radius:999px; padding:.18rem .7rem; min-height:2.1rem;}
-[data-testid="stRadio"] label:hover {border-color:#60a5fa;}
+/* Custom top navigation */
+.topnav {display:flex; gap:.55rem; flex-wrap:wrap; margin:.45rem 0 .8rem 0;}
+.topnav a {text-decoration:none; color:#e5e7eb; background:#111827; border:1px solid #1f2937; border-radius:10px; padding:.48rem .78rem; font-size:.86rem; font-weight:600; line-height:1; display:inline-block;}
+.topnav a:hover {border-color:#60a5fa; color:#ffffff; background:#172033;}
+.topnav a.active {background:#2563eb; border-color:#60a5fa; color:white;}
 .small-muted {color:#9ca3af; font-size:.78rem;}
 .action-card {background:#111827; border:1px solid #1f2937; border-radius:12px; padding:10px 12px; margin-bottom:8px;}
 .action-card strong {font-size:.88rem;}
@@ -52,13 +54,18 @@ df = get_enriched_holdings()
 summary = portfolio_summary()
 
 # ---------- top navigation ----------
+PAGES = ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Settings"]
+nav = st.query_params.get("page", "Dashboard")
+if nav not in PAGES:
+    nav = "Dashboard"
+
 st.title("AI Portfolio OS")
-nav = st.radio(
-    "Navigation",
-    ["Dashboard", "Portfolio", "Transactions", "Watchlist", "Settings"],
-    horizontal=True,
-    label_visibility="collapsed",
-)
+nav_html = '<div class="topnav">'
+for page in PAGES:
+    active = " active" if page == nav else ""
+    nav_html += f'<a class="{active}" href="?page={page}">{page}</a>'
+nav_html += '</div>'
+st.markdown(nav_html, unsafe_allow_html=True)
 st.caption("Compact portfolio dashboard")
 
 

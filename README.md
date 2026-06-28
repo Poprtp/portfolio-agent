@@ -1,17 +1,14 @@
-# AI Portfolio OS 3.4
+# AI Portfolio OS 3.5
 
-Compact UI update.
+Compact Streamlit portfolio dashboard with custom top button navigation and contextual sidebar actions.
 
-## Changes
-- Main navigation moved to top tabs
-- Left sidebar is now contextual for quick actions
-- Dashboard sidebar: refresh + action summary
-- Portfolio sidebar: add/edit/delete holdings
-- Transactions sidebar: add transaction
-- Watchlist sidebar: add/edit/delete watchlist
+## Run locally
 
-## Run
-```powershell
+```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
+
+## Deploy
+
+Push to GitHub and reboot the Streamlit Community Cloud app.
