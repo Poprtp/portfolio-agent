@@ -1,14 +1,20 @@
-# Portfolio OS 5.2 — One Page Monotone Desk
+# Portfolio OS 5.3 — Decision UX
 
-One-page layout:
-- Left column: Daily Desk + Watchlist
-- Right column: Dashboard + Holdings
-- No sidebar
-- Monotone Black / Grey / White UI
+One-page monotone portfolio desk with clearer trader decision language.
 
-Update:
-```powershell
-git add .
-git commit -m "Simplify to one page monotone desk"
-git push
+## What changed
+
+- Replaced the dense Watchlist table with readable trade cards.
+- Added Decision guide: READY / REVIEW / WAIT.
+- Renamed Entry to Buy Trigger where appropriate.
+- Split watchlist into Focus Today and Skip Today.
+- Added plain-language setup explanations.
+- Kept Dashboard on the right with P/L, holdings, risk notes, and allocation.
+- Sidebar remains removed.
+
+## Run locally
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
 ```
