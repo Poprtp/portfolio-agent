@@ -1,24 +1,19 @@
-# Portfolio OS V6.0 — AI Advisor
+# Portfolio OS V6.0.1 Hotfix
 
-One-page portfolio and trade desk with:
-- Daily Desk with Buy Trigger / Stop / Target
-- 30-minute stock homework logic
-- Decision History snapshots
-- Trade Journal planning
-- Alert logic
-- Optional GPT AI Advisor via `OPENAI_API_KEY`
+Fixes:
+- Prevents Decision History SQLite conflict from crashing the app.
+- Adds safer database migration for existing Streamlit Cloud databases.
+- Removes the top header/caption text from the app.
+- Keeps V6.0 features: AI Advisor, alerts, history, trade journal, one-page desk.
 
-## Deploy
-Copy files over your existing repo, then:
+Update steps:
+1. Copy all files into your local `D:\Portfolio-Agent` folder and overwrite existing files.
+2. Run:
 
 ```powershell
 git add .
-git commit -m "Upgrade to Portfolio OS V6.0 AI Advisor"
+git commit -m "Hotfix Portfolio OS V6.0.1"
 git push
 ```
 
-Then Streamlit Cloud → Clear cache → Reboot app.
-
-## Optional GPT Advisor
-Add `OPENAI_API_KEY` in Streamlit Cloud secrets to enable GPT-generated advisor notes.
-Without a key, the app uses the built-in rule-based advisor.
+Then in Streamlit Cloud: Clear cache -> Reboot app.

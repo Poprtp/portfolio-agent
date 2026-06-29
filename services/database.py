@@ -145,8 +145,17 @@ def _migrate(conn):
             conn.execute(f"ALTER TABLE watchlist ADD COLUMN {col} {spec}")
 
     decision_defaults = {
+        "snapshot_date": "TEXT DEFAULT ''",
+        "created_at": "TEXT DEFAULT ''",
+        "ticker": "TEXT DEFAULT ''",
+        "decision": "TEXT DEFAULT ''",
+        "score": "INTEGER DEFAULT 0",
         "technical_score": "INTEGER DEFAULT 0",
         "homework_score": "INTEGER DEFAULT 0",
+        "price": "REAL DEFAULT 0",
+        "entry": "REAL DEFAULT 0",
+        "stop": "REAL DEFAULT 0",
+        "target": "REAL DEFAULT 0",
         "risk_reward": "REAL DEFAULT 0",
         "setup": "TEXT DEFAULT ''",
         "reason": "TEXT DEFAULT ''",
@@ -155,6 +164,17 @@ def _migrate(conn):
     for col, spec in decision_defaults.items():
         if col not in cols:
             conn.execute(f"ALTER TABLE decision_history ADD COLUMN {col} {spec}")
+    conn.execute(
+        """
+        DELETE FROM decision_history
+        WHERE rowid NOT IN (
+            SELECT MAX(rowid)
+            FROM decision_history
+            GROUP BY snapshot_date, ticker
+        )
+        """
+    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_decision_history_day_ticker ON decision_history(snapshot_date, ticker)")
 
     journal_defaults = {
         "decision": "TEXT DEFAULT ''",

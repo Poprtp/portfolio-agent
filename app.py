@@ -287,11 +287,7 @@ holdings = get_enriched_holdings()
 summary = portfolio_summary()
 last_sync = get_setting("last_price_sync", "Not synced yet")
 
-header_left, header_mid, header_right = st.columns([1.2, 2.1, .65])
-with header_left:
-    st.title("Portfolio Desk")
-with header_mid:
-    st.caption(f"V6.0 AI Advisor · Decision history · Alerts · Last sync: {last_sync}")
+header_space, header_right = st.columns([4.8, .65])
 with header_right:
     if st.button("Refresh", use_container_width=True):
         refresh_all()
@@ -303,7 +299,11 @@ with left:
     st.markdown('<div class="section-title">Daily Desk</div>', unsafe_allow_html=True)
     desk = trade_desk_watchlist()
     if not desk.empty:
-        save_daily_snapshot(desk)
+        try:
+            save_daily_snapshot(desk)
+        except Exception:
+            # History is useful but should never block the desk from loading.
+            pass
 
     st.markdown(
         """
