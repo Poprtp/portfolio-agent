@@ -15,3 +15,9 @@ git push
 ```
 
 Then Streamlit Cloud: Clear cache -> Reboot app.
+
+
+## V6.1.1 layout hotfix
+- Added more top spacing so the top summary row is fully visible
+- Fixed stock card overflow inside Daily Desk expanders
+- Made trigger/homework blocks responsive to the column width

@@ -32,7 +32,7 @@ st.markdown(
 [data-testid="stAppViewContainer"] {background:var(--bg);}
 [data-testid="stSidebar"] {background:#080808; border-right:1px solid var(--line);}
 [data-testid="stSidebar"] .block-container {padding:.8rem .7rem;}
-.block-container {padding:.55rem .85rem .75rem .85rem; max-width:1420px;}
+.block-container {padding:1.15rem .9rem .9rem .9rem; max-width:1420px;}
 h1 {font-size:1.08rem !important; margin:0 0 .1rem 0 !important; letter-spacing:-.035em; color:var(--text);}
 h2 {font-size:.92rem !important; margin:.22rem 0 .18rem 0 !important; letter-spacing:-.02em;}
 h3 {font-size:.78rem !important; margin:.2rem 0 .15rem 0 !important; color:var(--soft);}
@@ -61,12 +61,12 @@ input, textarea, select {border-radius:10px !important;}
 .level.wait {background:#161616; color:#9a9a9a;}
 .label {color:var(--muted); font-size:.66rem; text-transform:uppercase; letter-spacing:.08em;}
 .value {font-weight:700; color:var(--text); font-size:.82rem;}
-.homework-grid {display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; margin:.35rem 0 .4rem 0;}
-.homework-item {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:7px 8px; min-height:54px;}
+.homework-grid {display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; margin:.35rem 0 .4rem 0;}
+.homework-item {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:7px 8px; min-height:54px; min-width:0; overflow-wrap:anywhere; word-break:break-word;}
 .homework-item b {display:block; color:var(--soft); font-size:.72rem; margin-top:1px;}
 .homework-item span {color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.06em;}
-.trigger-grid {display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin:.35rem 0;}
-.trigger-item {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:7px 8px;}
+.trigger-grid {display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; margin:.35rem 0;}
+.trigger-item {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:7px 8px; min-width:0; overflow-wrap:anywhere;}
 .trigger-item b {font-size:.76rem; color:var(--text);}
 .trigger-item span {display:block; color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.06em;}
 .reason-box {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; color:var(--muted); font-size:.72rem; margin-top:6px;}
@@ -75,6 +75,11 @@ input, textarea, select {border-radius:10px !important;}
 [data-testid="stExpander"] details summary {font-size:.80rem !important; font-weight:700 !important; color:var(--text) !important; padding:5px 4px !important;}
 [data-testid="stExpander"] details[open] summary {border-bottom:1px solid var(--line);}
 .sidebar-note {font-size:.7rem; color:var(--muted); line-height:1.35;}
+@media (min-width: 1200px) {
+  .homework-grid {grid-template-columns:repeat(3, minmax(0, 1fr));}
+  .trigger-grid {grid-template-columns:repeat(4, minmax(0, 1fr));}
+}
+
 </style>
 """,
     unsafe_allow_html=True,
