@@ -22,12 +22,12 @@ st.markdown(
     """
 <style>
 :root {
-  --bg:#050505; --panel:#101010; --panel2:#151515; --line:#2b2b2b;
+  --bg:#050505; --panel:#101010; --panel2:#151515; --panel3:#1d1d1d; --line:#2b2b2b;
   --text:#f5f5f5; --muted:#9a9a9a; --soft:#d4d4d4; --dim:#737373;
 }
 [data-testid="stSidebar"], [data-testid="collapsedControl"] {display:none !important;}
 [data-testid="stAppViewContainer"] {background:var(--bg);}
-.block-container {padding:.45rem .8rem .7rem .8rem; max-width:1380px;}
+.block-container {padding:.55rem .85rem .75rem .85rem; max-width:1380px;}
 h1 {font-size:1.08rem !important; margin:0 0 .1rem 0 !important; letter-spacing:-.035em; color:var(--text);}
 h2 {font-size:.92rem !important; margin:.22rem 0 .18rem 0 !important; letter-spacing:-.02em;}
 h3 {font-size:.78rem !important; margin:.2rem 0 .15rem 0 !important; color:var(--soft);}
@@ -46,23 +46,29 @@ input, textarea, select {border-radius:10px !important;}
 .focus-card {background:#f5f5f5; color:#050505; border:1px solid #f5f5f5; border-radius:16px; padding:13px 15px; margin-bottom:8px;}
 .focus-card .muted, .focus-card .tiny {color:#525252;}
 .focus-card hr {border-color:#d4d4d4;}
-.row-card {display:grid; grid-template-columns:76px 1fr 74px; gap:10px; align-items:start; background:var(--panel); border:1px solid var(--line); border-radius:13px; padding:9px 10px; margin-bottom:6px;}
-.row-card.dim {opacity:.72;}
-.row-title {font-weight:700; color:var(--text); font-size:.84rem;}
-.row-sub {color:var(--muted); font-size:.7rem; margin-top:2px;}
+.guide {display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:8px;}
+.guide-item {background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 9px; min-height:56px;}
+.guide-item b {font-size:.72rem; color:var(--soft);}
+.guide-item div {font-size:.66rem; color:var(--muted); margin-top:3px; line-height:1.25;}
 .level {font-weight:800; font-size:.68rem; letter-spacing:.02em; border:1px solid var(--line); padding:3px 7px; border-radius:999px; display:inline-block; color:var(--soft);}
 .level.ready {background:#f5f5f5; color:#050505; border-color:#f5f5f5;}
 .level.review {background:#d4d4d4; color:#050505; border-color:#d4d4d4;}
 .level.wait {background:#161616; color:#9a9a9a;}
 .label {color:var(--muted); font-size:.66rem; text-transform:uppercase; letter-spacing:.08em;}
 .value {font-weight:700; color:var(--text); font-size:.82rem;}
-.guide {display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:8px;}
-.guide-item {background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 9px; min-height:56px;}
-.guide-item b {font-size:.72rem; color:var(--soft);}
-.guide-item div {font-size:.66rem; color:var(--muted); margin-top:3px; line-height:1.25;}
-.soft-line {height:1px; background:var(--line); margin:8px 0;}
-.success-mini {background:#f5f5f5; color:#050505; border-radius:10px; padding:7px 9px; margin:6px 0; font-size:.72rem;}
-.warning-mini {background:#171717; color:#d4d4d4; border:1px solid #3a3a3a; border-radius:10px; padding:7px 9px; margin:6px 0; font-size:.72rem;}
+.homework-grid {display:grid; grid-template-columns:repeat(5, 1fr); gap:6px; margin:.35rem 0 .4rem 0;}
+.homework-item {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:7px 8px; min-height:54px;}
+.homework-item b {display:block; color:var(--soft); font-size:.72rem; margin-top:1px;}
+.homework-item span {color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.06em;}
+.trigger-grid {display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin:.35rem 0;}
+.trigger-item {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:7px 8px;}
+.trigger-item b {font-size:.76rem; color:var(--text);}
+.trigger-item span {display:block; color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.06em;}
+.reason-box {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; color:var(--muted); font-size:.72rem; margin-top:6px;}
+/* make collapsed rows feel like compact cards */
+[data-testid="stExpander"] {border:1px solid var(--line) !important; border-radius:13px !important; background:var(--panel) !important; margin-bottom:7px !important;}
+[data-testid="stExpander"] details summary {font-size:.84rem !important; font-weight:700 !important; color:var(--text) !important; padding:6px 4px !important;}
+[data-testid="stExpander"] details[open] summary {border-bottom:1px solid var(--line);}
 </style>
 """,
     unsafe_allow_html=True,
@@ -87,53 +93,62 @@ def setup_copy(setup: str) -> str:
         return "หุ้นยังน่าสนใจ แต่ราคายืดเกิน รอให้ย่อก่อน"
     if "no clean" in setup_l:
         return "ยังไม่มีจุดเข้าที่คุมความเสี่ยงได้ดีพอ"
-    if "insufficient" in setup_l:
-        return "ข้อมูลราคายังไม่พอ หรือดึงข้อมูลไม่ได้"
     return "ใช้เป็นระดับอ้างอิง ต้องเช็กกราฟก่อนตัดสินใจ"
 
 
-def trade_card(row, muted=False):
-    ticker = esc(row.get("Ticker", ""))
-    decision = esc(row.get("Decision", "WAIT"))
-    score = row.get("Score", 0)
-    price = row.get("Price", 0)
-    entry = row.get("Entry", 0)
-    stop = row.get("Stop", 0)
-    target = row.get("Target", 0)
-    rr = row.get("R/R", 0)
-    setup = esc(row.get("Setup", ""))
-    reason = esc(row.get("Reason", ""))
-    level_class = str(decision).lower()
-    css_dim = " dim" if muted else ""
-    trigger_label = "Buy Trigger" if decision != "WAIT" else "Ref. Trigger"
-    st.markdown(
-        f"""
-<div class="row-card{css_dim}">
-  <div>
-    <div class="row-title">{ticker}</div>
-    <div class="level {level_class}">{decision}</div>
-  </div>
-  <div>
-    <div><span class="value">{setup}</span></div>
-    <div class="row-sub">{setup_copy(setup)}</div>
-    <div class="row-sub">{reason}</div>
-    <div class="soft-line"></div>
-    <div class="row-sub">Price {usd(price)} · {trigger_label} {usd(entry)} · Stop {usd(stop)} · Target {usd(target)}</div>
-  </div>
-  <div style="text-align:right;">
-    <div class="label">Score</div>
-    <div class="value">{score}/100</div>
-    <div class="row-sub">{rr}R</div>
-  </div>
+def decision_line(decision: str) -> str:
+    return {
+        "READY": "Setup ใช้ได้แล้ว เช็กขนาดไม้และความเสี่ยงก่อนเข้า",
+        "REVIEW": "น่าสนใจ แต่รอจังหวะหรือ confirmation เพิ่ม",
+        "WAIT": "ข้ามก่อน ยังไม่มี edge ชัดพอสำหรับวันนี้",
+    }.get(str(decision).upper(), "Review setup before acting")
+
+
+def compact_trade_expander(row, expanded=False):
+    ticker = str(row.get("Ticker", ""))
+    decision = str(row.get("Decision", "WAIT"))
+    score = int(row.get("Score", 0) or 0)
+    setup = str(row.get("Setup", ""))
+    level_icon = "●" if decision == "READY" else "◐" if decision == "REVIEW" else "○"
+    header = f"{level_icon} {ticker}   ·   {decision}   ·   Score {score}/100"
+
+    with st.expander(header, expanded=expanded):
+        trigger_label = "Buy Trigger" if decision != "WAIT" else "Reference Trigger"
+        st.markdown(
+            f"""
+<div class="trigger-grid">
+  <div class="trigger-item"><span>Current</span><b>{usd(row.get('Price', 0))}</b></div>
+  <div class="trigger-item"><span>{trigger_label}</span><b>{usd(row.get('Entry', 0))}</b></div>
+  <div class="trigger-item"><span>Stop</span><b>{usd(row.get('Stop', 0))}</b></div>
+  <div class="trigger-item"><span>Target</span><b>{usd(row.get('Target', 0))}</b></div>
+</div>
+<div class="reason-box">
+  <b style="color:#f5f5f5;">{esc(setup)}</b><br>
+  {esc(setup_copy(setup))}<br>
+  <span class="muted">R/R {row.get('R/R', 0)}R · Technical {row.get('Technical Score', row.get('Score', 0))}/100 · Homework {row.get('Homework Score', 0)}/100</span>
 </div>
 """,
-        unsafe_allow_html=True,
-    )
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            f"""
+<div class="homework-grid">
+  <div class="homework-item"><span>Business</span><b>{esc(row.get('Business', 'Unknown'))}</b></div>
+  <div class="homework-item"><span>Growth</span><b>{esc(row.get('Growth', 'Unknown'))}</b></div>
+  <div class="homework-item"><span>Profit</span><b>{esc(row.get('Profit', 'Unknown'))}</b></div>
+  <div class="homework-item"><span>Valuation</span><b>{esc(row.get('Valuation', 'Unknown'))}</b></div>
+  <div class="homework-item"><span>Exit</span><b>{esc(row.get('Exit', 'Stop/Thesis'))}</b></div>
+</div>
+<div class="reason-box">{esc(row.get('Reason', ''))}</div>
+""",
+            unsafe_allow_html=True,
+        )
 
 
 def holdings_view(df, height=235):
     if df.empty:
-        st.info("No holdings yet. Add ticker, shares and average cost below.")
+        st.info("No holdings yet.")
         return
     show = df[["ticker", "shares", "avg_cost", "current_price", "market_value", "gain_loss", "gain_loss_pct"]].copy()
     show = show.rename(
@@ -152,76 +167,74 @@ def holdings_view(df, height=235):
 
 def manage_watchlist_inline():
     with st.expander("Manage watchlist", expanded=False):
-        with st.form("watchlist_add_form", clear_on_submit=True):
-            c1, c2 = st.columns([1, .45])
+        if "last_watch_action" in st.session_state:
+            st.caption(st.session_state.last_watch_action)
+        with st.form("add_watch_form", clear_on_submit=True):
+            c1, c2 = st.columns([1.6, .55])
             with c1:
-                ticker = st.text_input("Add ticker", value="", placeholder="e.g. AMD, MSFT, TSM", key="watch_ticker_add").upper().strip()
+                ticker = st.text_input("Ticker", value="", placeholder="e.g. MSFT, AMD, TSM").upper().strip()
             with c2:
                 st.write("")
-                st.write("")
-                submitted = st.form_submit_button("Add", use_container_width=True)
-            if submitted:
-                if not ticker:
-                    st.markdown("<div class='warning-mini'>ใส่ Ticker ก่อน เช่น AMD หรือ MSFT</div>", unsafe_allow_html=True)
-                else:
-                    profile = add_watchlist(ticker)
-                    st.session_state["last_watch_added"] = ticker
-                    name = profile.get("name", ticker) if isinstance(profile, dict) else ticker
-                    st.markdown(f"<div class='success-mini'>Added {esc(ticker)} · {esc(name)}</div>", unsafe_allow_html=True)
+                add_clicked = st.form_submit_button("Add", use_container_width=True)
+            if add_clicked:
+                if ticker:
+                    add_watchlist(ticker)
+                    st.session_state.last_watch_action = f"Added {ticker} to watchlist"
                     st.rerun()
+                else:
+                    st.error("Please enter a ticker.")
 
         wdf = get_watchlist()
         if not wdf.empty:
-            st.caption(f"Watchlist: {len(wdf)} stocks. Newly added stocks now show in Focus/Skip list above.")
-            d1, d2 = st.columns([1, .45])
-            with d1:
-                del_ticker = st.selectbox("Remove", wdf["ticker"].tolist(), key="delete_watch")
-            with d2:
-                st.write("")
-                st.write("")
-                if st.button("Remove", use_container_width=True):
+            with st.form("delete_watch_form"):
+                d1, d2 = st.columns([1.6, .55])
+                with d1:
+                    del_ticker = st.selectbox("Remove", wdf["ticker"].tolist(), key="delete_watch")
+                with d2:
+                    st.write("")
+                    remove_clicked = st.form_submit_button("Remove", use_container_width=True)
+                if remove_clicked:
                     delete_watchlist(del_ticker)
-                    st.session_state["last_watch_removed"] = del_ticker
+                    st.session_state.last_watch_action = f"Removed {del_ticker} from watchlist"
                     st.rerun()
 
 
 def manage_holdings_inline(holdings):
     with st.expander("Manage holdings", expanded=False):
-        with st.form("holding_save_form", clear_on_submit=True):
-            c1, c2, c3, c4 = st.columns([.8, .65, .75, .75])
+        if "last_hold_action" in st.session_state:
+            st.caption(st.session_state.last_hold_action)
+        with st.form("holdings_form", clear_on_submit=True):
+            c1, c2, c3, c4 = st.columns([.85, .7, .8, .65])
             with c1:
-                ticker = st.text_input("Ticker", value="", placeholder="e.g. RKLB", key="hold_ticker_add").upper().strip()
+                ticker = st.text_input("Ticker", value="", placeholder="e.g. RKLB").upper().strip()
             with c2:
-                shares = st.number_input("Shares", min_value=0.0, value=0.0, step=1.0, key="hold_shares_add")
+                shares = st.number_input("Shares", min_value=0.0, value=0.0, step=1.0)
             with c3:
-                avg = st.number_input("Avg Cost", min_value=0.0, value=0.0, step=1.0, key="hold_avg_add")
+                avg = st.number_input("Avg Cost", min_value=0.0, value=0.0, step=1.0)
             with c4:
                 st.write("")
-                st.write("")
-                submitted = st.form_submit_button("Save", use_container_width=True)
-            if submitted:
+                save_clicked = st.form_submit_button("Save", use_container_width=True)
+            if save_clicked:
                 if not ticker:
-                    st.markdown("<div class='warning-mini'>ใส่ Ticker ก่อน</div>", unsafe_allow_html=True)
-                elif shares <= 0:
-                    st.markdown("<div class='warning-mini'>ใส่จำนวนหุ้นมากกว่า 0 ก่อน ไม่งั้น Dashboard จะไม่แสดง</div>", unsafe_allow_html=True)
-                elif avg <= 0:
-                    st.markdown("<div class='warning-mini'>ใส่ Average Cost มากกว่า 0 ก่อน</div>", unsafe_allow_html=True)
+                    st.error("Please enter a ticker.")
+                elif shares <= 0 or avg <= 0:
+                    st.error("Shares and Avg Cost must be greater than 0.")
                 else:
-                    profile = upsert_holding_auto(ticker, shares, avg)
-                    st.session_state["last_holding_saved"] = ticker
-                    name = profile.get("name", ticker) if isinstance(profile, dict) else ticker
-                    st.markdown(f"<div class='success-mini'>Saved {esc(ticker)} · {esc(name)}</div>", unsafe_allow_html=True)
+                    upsert_holding_auto(ticker, shares, avg)
+                    st.session_state.last_hold_action = f"Saved {ticker} holding"
                     st.rerun()
 
         if not holdings.empty:
-            d1, d2 = st.columns([1, .75])
-            with d1:
-                del_ticker = st.selectbox("Delete holding", holdings["ticker"].tolist(), key="delete_holding")
-            with d2:
-                st.write("")
-                st.write("")
-                if st.button("Delete", use_container_width=True):
+            with st.form("delete_holdings_form"):
+                d1, d2 = st.columns([1.4, .65])
+                with d1:
+                    del_ticker = st.selectbox("Delete holding", holdings["ticker"].tolist(), key="delete_holding")
+                with d2:
+                    st.write("")
+                    delete_clicked = st.form_submit_button("Delete", use_container_width=True)
+                if delete_clicked:
                     delete_holding(del_ticker)
+                    st.session_state.last_hold_action = f"Deleted {del_ticker} holding"
                     st.rerun()
 
 
@@ -239,7 +252,7 @@ with header_right:
         refresh_all()
         st.rerun()
 
-left, right = st.columns([1.08, .92], gap="medium")
+left, right = st.columns([1.05, .95], gap="medium")
 
 with left:
     st.markdown('<div class="section-title">Daily Desk</div>', unsafe_allow_html=True)
@@ -248,16 +261,13 @@ with left:
     st.markdown(
         """
 <div class="guide">
-  <div class="guide-item"><b>READY</b><div>Setup ใช้ได้แล้ว เช็กขนาดไม้ก่อนเข้า</div></div>
-  <div class="guide-item"><b>REVIEW</b><div>น่าสนใจ แต่รอจังหวะ/confirmation</div></div>
-  <div class="guide-item"><b>WAIT</b><div>ข้ามก่อน ยังไม่มี edge ชัด</div></div>
+  <div class="guide-item"><b>READY</b><div>Setup ผ่านแล้ว แต่ยังต้องคุมขนาดไม้</div></div>
+  <div class="guide-item"><b>REVIEW</b><div>น่าสนใจ รอจังหวะหรือ confirmation</div></div>
+  <div class="guide-item"><b>WAIT</b><div>ข้ามก่อน ไม่มี edge ชัด</div></div>
 </div>
 """,
         unsafe_allow_html=True,
     )
-
-    if "last_watch_added" in st.session_state:
-        st.caption(f"Last added: {st.session_state['last_watch_added']}")
 
     if desk.empty:
         st.markdown(
@@ -274,11 +284,6 @@ with left:
         skip = desk[desk["Decision"] == "WAIT"].copy()
         best = actionable.iloc[0] if not actionable.empty else desk.iloc[0]
         decision = str(best["Decision"])
-        focus_line = {
-            "READY": "Actionable setup. Only proceed if position size and portfolio risk are acceptable.",
-            "REVIEW": "Close to actionable. Watch this first and wait for confirmation or a better trigger.",
-            "WAIT": "No clean edge today. Keep it on the list but do not force the trade.",
-        }.get(decision, "Review setup before acting.")
         trigger_label = "Buy Trigger" if decision != "WAIT" else "Reference Trigger"
 
         st.markdown(
@@ -289,7 +294,7 @@ with left:
   <div>{trigger_label} <b>{usd(best['Entry'])}</b> · Stop <b>{usd(best['Stop'])}</b> · Target <b>{usd(best['Target'])}</b></div>
   <div class="muted">{esc(best['Setup'])} · Score {best['Score']}/100 · R/R {best['R/R']}R</div>
   <hr>
-  <div class="muted">{focus_line}</div>
+  <div class="muted">{esc(decision_line(decision))}</div>
 </div>
 """,
             unsafe_allow_html=True,
@@ -299,15 +304,15 @@ with left:
         if actionable.empty:
             st.markdown("<div class='card-compact muted'>No actionable setups today. Best action is to wait.</div>", unsafe_allow_html=True)
         else:
-            for _, row in actionable.iterrows():
-                trade_card(row)
+            for i, (_, row) in enumerate(actionable.iterrows()):
+                compact_trade_expander(row, expanded=(i == 0))
 
         st.markdown('<div class="section-title">Skip Today</div>', unsafe_allow_html=True)
         if skip.empty:
             st.markdown("<div class='card-compact muted'>No skip list right now.</div>", unsafe_allow_html=True)
         else:
             for _, row in skip.iterrows():
-                trade_card(row, muted=True)
+                compact_trade_expander(row, expanded=False)
 
     manage_watchlist_inline()
 

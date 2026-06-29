@@ -1,18 +1,23 @@
-# Portfolio OS 5.3.1 Add Fix
+# Portfolio OS 5.4 — Homework UX
 
-Hotfix for one-page monotone Portfolio Desk.
+## Changes
+- One-page desk stays the same: left Daily Desk, right Dashboard.
+- Daily Desk stock rows are now collapsed by default.
+- Each row shows only ticker, decision, and score until opened.
+- Expanded view shows Buy Trigger, Stop, Target, R/R, setup explanation, and 30-minute homework checks.
+- Added 30-Min Stock Homework logic:
+  - Business clarity
+  - Growth driver
+  - Profit quality
+  - Valuation risk
+  - Exit plan
+- Combined score now blends technical setup and homework quality.
 
-Fixes:
-- Watchlist Add now uses a form and shows feedback.
-- Newly added tickers are not hidden by top-4 Skip Today limit anymore.
-- Focus Today and Skip Today now show all watchlist items.
-- Holdings Save now validates Ticker, Shares, and Avg Cost before saving.
-- If Shares is 0, the app explains why it will not appear in Dashboard.
-
-Deploy:
-
+## Deploy
 ```powershell
 git add .
-git commit -m "Fix add watchlist and holdings visibility"
+git commit -m "Upgrade to Portfolio OS 5.4 homework UX"
 git push
 ```
+
+Then Streamlit Cloud → Clear cache → Reboot app.
