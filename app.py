@@ -31,9 +31,11 @@ st.markdown(
   --text:#f5f5f5; --muted:#9a9a9a; --soft:#d4d4d4; --dim:#737373;
 }
 [data-testid="stAppViewContainer"] {background:var(--bg);}
+[data-testid="stHeader"] {background:rgba(5,5,5,0.92);}
+.main .block-container {padding-top:3.2rem !important;}
 [data-testid="stSidebar"] {background:#080808; border-right:1px solid var(--line);}
 [data-testid="stSidebar"] .block-container {padding:.8rem .7rem;}
-.block-container {padding:1.15rem .9rem .9rem .9rem; max-width:1420px;}
+.block-container {padding:3.2rem .9rem .9rem .9rem; max-width:1420px;}
 h1 {font-size:1.08rem !important; margin:0 0 .1rem 0 !important; letter-spacing:-.035em; color:var(--text);}
 h2 {font-size:.92rem !important; margin:.22rem 0 .18rem 0 !important; letter-spacing:-.02em;}
 h3 {font-size:.78rem !important; margin:.2rem 0 .15rem 0 !important; color:var(--soft);}

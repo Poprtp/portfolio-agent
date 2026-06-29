@@ -42,3 +42,9 @@ Then Streamlit Cloud: Clear cache -> Reboot app.
 - Sidebar has an Overnight Quote tool.
 - Daily Desk cards can fetch overnight price per ticker.
 - Quotes may be delayed or unavailable depending on Yahoo/yfinance coverage.
+
+
+## V6.1.5 Top Safe Layout
+- Increased safe top spacing so READY/REVIEW/WAIT and dashboard metric cards are fully visible.
+- Added Streamlit header-safe CSS to prevent the top row from being clipped under the toolbar.
+- Keeps all V6.1.4 overnight quote features.
