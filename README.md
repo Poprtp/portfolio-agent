@@ -87,3 +87,9 @@ git push
 ```
 
 Then run GitHub Actions -> Discord Stock Alerts -> Run workflow.
+
+
+## V6.4 P/L line chart
+- Replaced the allocation donut with a 3-month unrealized P/L line chart.
+- Added clearer READY wording: READY means reviewable setup, not an automatic buy signal.
+- The P/L chart is based on current shares and average cost using historical close prices.

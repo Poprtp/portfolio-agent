@@ -18,7 +18,7 @@ from services.portfolio import (
     upsert_holding_auto,
 )
 from services.watchlist import add_watchlist, delete_watchlist, get_watchlist, trade_desk_watchlist
-from utils.charts import allocation_chart
+from utils.charts import pnl_line_chart
 from utils.formatting import pct, usd
 
 st.set_page_config(page_title="Portfolio Desk", page_icon="▣", layout="wide", initial_sidebar_state="expanded")
@@ -178,7 +178,7 @@ def overnight_widget(ticker: str, fallback_price: float, key_suffix: str):
 
 def decision_line(decision: str) -> str:
     return {
-        "READY": "Setup ใช้ได้แล้ว เช็กขนาดไม้และความเสี่ยงก่อนเข้า",
+        "READY": "เข้าเงื่อนไขให้พิจารณา ไม่ใช่คำสั่งซื้อ ต้องเช็กขนาดไม้และความเสี่ยงก่อน",
         "REVIEW": "น่าสนใจ แต่รอจังหวะหรือ confirmation เพิ่ม",
         "WAIT": "ข้ามก่อน ยังไม่มี edge ชัดพอสำหรับวันนี้",
     }.get(str(decision).upper(), "Review setup before acting")
@@ -448,7 +448,7 @@ with left:
     st.markdown(
         """
 <div class="guide">
-  <div class="guide-item"><b>READY</b><div>Setup ผ่านแล้ว แต่ยังต้องคุมขนาดไม้</div></div>
+  <div class="guide-item"><b>READY</b><div>ไม่ใช่คำสั่งซื้อ — เช็กขนาดไม้และ risk ก่อน</div></div>
   <div class="guide-item"><b>REVIEW</b><div>น่าสนใจ รอจังหวะหรือ confirmation</div></div>
   <div class="guide-item"><b>WAIT</b><div>ข้ามก่อน ไม่มี edge ชัด</div></div>
 </div>
@@ -529,8 +529,8 @@ with right:
         for note in top_risk_notes(holdings)[:2]:
             st.markdown(f"<div class='card-compact'>{esc(note)}</div>", unsafe_allow_html=True)
     with lower_right:
-        st.markdown('<div class="section-title">Allocation</div>', unsafe_allow_html=True)
-        st.plotly_chart(allocation_chart(holdings), use_container_width=True)
+        st.markdown('<div class="section-title">P/L Trend</div>', unsafe_allow_html=True)
+        st.plotly_chart(pnl_line_chart(holdings, period="3mo"), use_container_width=True)
 
     perf = get_last_call_performance(limit=3)
     with st.expander("Decision History", expanded=False):
