@@ -1,7 +1,18 @@
 import pandas as pd
 import yfinance as yf
 
+try:
+    import streamlit as st
+    cache_data = st.cache_data(ttl=3600, show_spinner=False)
+except Exception:  # pragma: no cover
+    def cache_data(func=None, **kwargs):
+        def decorator(f):
+            return f
+        return decorator(func) if func else decorator
 
+
+
+@cache_data
 def fetch_price(ticker: str, fallback: float = 0.0):
     ticker = str(ticker).upper().strip()
     if ticker == "CASH":
@@ -16,6 +27,8 @@ def fetch_price(ticker: str, fallback: float = 0.0):
         return float(fallback or 0), "fallback"
 
 
+
+@cache_data
 def price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
     ticker = str(ticker).upper().strip()
     try:
@@ -27,6 +40,8 @@ def price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
         return pd.DataFrame()
 
 
+
+@cache_data
 def get_symbol_profile(ticker: str) -> dict:
     ticker = str(ticker).upper().strip()
     price, _ = fetch_price(ticker, 0)

@@ -19,7 +19,7 @@ from services.watchlist import add_watchlist, delete_watchlist, get_watchlist, t
 from utils.charts import allocation_chart
 from utils.formatting import pct, usd
 
-st.set_page_config(page_title="Portfolio Desk", page_icon="▣", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Portfolio Desk", page_icon="▣", layout="wide", initial_sidebar_state="expanded")
 init_db()
 
 st.markdown(
@@ -29,9 +29,10 @@ st.markdown(
   --bg:#050505; --panel:#101010; --panel2:#151515; --panel3:#1d1d1d; --line:#2b2b2b;
   --text:#f5f5f5; --muted:#9a9a9a; --soft:#d4d4d4; --dim:#737373;
 }
-[data-testid="stSidebar"], [data-testid="collapsedControl"] {display:none !important;}
 [data-testid="stAppViewContainer"] {background:var(--bg);}
-.block-container {padding:.55rem .85rem .75rem .85rem; max-width:1380px;}
+[data-testid="stSidebar"] {background:#080808; border-right:1px solid var(--line);}
+[data-testid="stSidebar"] .block-container {padding:.8rem .7rem;}
+.block-container {padding:.55rem .85rem .75rem .85rem; max-width:1420px;}
 h1 {font-size:1.08rem !important; margin:0 0 .1rem 0 !important; letter-spacing:-.035em; color:var(--text);}
 h2 {font-size:.92rem !important; margin:.22rem 0 .18rem 0 !important; letter-spacing:-.02em;}
 h3 {font-size:.78rem !important; margin:.2rem 0 .15rem 0 !important; color:var(--soft);}
@@ -71,8 +72,9 @@ input, textarea, select {border-radius:10px !important;}
 .reason-box {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; color:var(--muted); font-size:.72rem; margin-top:6px;}
 .mini-list {font-size:.72rem; color:var(--muted); line-height:1.4; white-space:pre-line;}
 [data-testid="stExpander"] {border:1px solid var(--line) !important; border-radius:13px !important; background:var(--panel) !important; margin-bottom:7px !important;}
-[data-testid="stExpander"] details summary {font-size:.84rem !important; font-weight:700 !important; color:var(--text) !important; padding:6px 4px !important;}
+[data-testid="stExpander"] details summary {font-size:.80rem !important; font-weight:700 !important; color:var(--text) !important; padding:5px 4px !important;}
 [data-testid="stExpander"] details[open] summary {border-bottom:1px solid var(--line);}
+.sidebar-note {font-size:.7rem; color:var(--muted); line-height:1.35;}
 </style>
 """,
     unsafe_allow_html=True,
@@ -85,6 +87,10 @@ def esc(value) -> str:
 
 def refresh_all():
     refresh_prices()
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
 
 
 def get_openai_key() -> str:
@@ -121,7 +127,7 @@ def compact_trade_expander(row, portfolio_value: float, expanded=False):
     score = int(row.get("Score", 0) or 0)
     setup = str(row.get("Setup", ""))
     level_icon = "●" if decision == "READY" else "◐" if decision == "REVIEW" else "○"
-    header = f"{level_icon} {ticker}   ·   {decision}   ·   Score {score}/100"
+    header = f"{level_icon} {ticker} · {decision} · Score {score}/100"
 
     with st.expander(header, expanded=expanded):
         trigger_label = "Buy Trigger" if decision != "WAIT" else "Reference Trigger"
@@ -156,7 +162,7 @@ def compact_trade_expander(row, portfolio_value: float, expanded=False):
             unsafe_allow_html=True,
         )
 
-        p1, p2 = st.columns([.7, 1.3])
+        p1, p2 = st.columns([.75, 1.25])
         with p1:
             if st.button("Plan trade", use_container_width=True, key=f"plan_{ticker}"):
                 trade_id = save_planned_trade(dict(row), portfolio_value)
@@ -164,6 +170,15 @@ def compact_trade_expander(row, portfolio_value: float, expanded=False):
                 st.rerun()
         with p2:
             st.caption("Position size is calculated at 1% portfolio risk in Trade Journal.")
+
+
+def render_stock_grid(df, portfolio_value: float, expanded_first=False):
+    if df.empty:
+        return
+    cols = st.columns(2, gap="small")
+    for i, (_, row) in enumerate(df.iterrows()):
+        with cols[i % 2]:
+            compact_trade_expander(row, portfolio_value, expanded=(expanded_first and i == 0))
 
 
 def holdings_view(df, height=235):
@@ -185,38 +200,36 @@ def holdings_view(df, height=235):
     st.dataframe(show, use_container_width=True, hide_index=True, height=height)
 
 
-def manage_watchlist_inline():
-    with st.expander("Manage watchlist", expanded=False):
-        if "last_watch_action" in st.session_state:
-            st.caption(st.session_state.last_watch_action)
-        with st.form("add_watch_form", clear_on_submit=True):
-            c1, c2 = st.columns([1.6, .55])
-            with c1:
-                ticker = st.text_input("Ticker", value="", placeholder="e.g. MSFT, AMD, TSM").upper().strip()
-            with c2:
-                st.write("")
-                add_clicked = st.form_submit_button("Add", use_container_width=True)
-            if add_clicked:
-                if ticker:
-                    add_watchlist(ticker)
-                    st.session_state.last_watch_action = f"Added {ticker} to watchlist"
-                    st.rerun()
-                else:
-                    st.error("Please enter a ticker.")
+def manage_watchlist_sidebar():
+    st.markdown("### Watchlist")
+    st.markdown("<div class='sidebar-note'>เพิ่ม/ลบหุ้นที่ต้องการให้ Daily Desk วิเคราะห์</div>", unsafe_allow_html=True)
+    if "last_watch_action" in st.session_state:
+        st.caption(st.session_state.last_watch_action)
 
-        wdf = get_watchlist()
-        if not wdf.empty:
-            with st.form("delete_watch_form"):
-                d1, d2 = st.columns([1.6, .55])
-                with d1:
-                    del_ticker = st.selectbox("Remove", wdf["ticker"].tolist(), key="delete_watch")
-                with d2:
-                    st.write("")
-                    remove_clicked = st.form_submit_button("Remove", use_container_width=True)
-                if remove_clicked:
-                    delete_watchlist(del_ticker)
-                    st.session_state.last_watch_action = f"Removed {del_ticker} from watchlist"
-                    st.rerun()
+    with st.form("add_watch_form", clear_on_submit=True):
+        ticker = st.text_input("Add ticker", value="", placeholder="e.g. CRWD, AMD, TSM").upper().strip()
+        add_clicked = st.form_submit_button("Add to Watchlist", use_container_width=True)
+        if add_clicked:
+            if ticker:
+                add_watchlist(ticker)
+                st.session_state.last_watch_action = f"Added {ticker}"
+                st.rerun()
+            else:
+                st.error("Please enter a ticker.")
+
+    wdf = get_watchlist()
+    st.caption(f"Watchlist: {len(wdf)} symbols")
+    if not wdf.empty:
+        with st.form("delete_watch_form"):
+            del_ticker = st.selectbox("Remove ticker", wdf["ticker"].tolist(), key="delete_watch")
+            remove_clicked = st.form_submit_button("Remove", use_container_width=True)
+            if remove_clicked:
+                delete_watchlist(del_ticker)
+                st.session_state.last_watch_action = f"Removed {del_ticker}"
+                st.rerun()
+
+    st.divider()
+    st.caption("Default baseline includes 50 Nasdaq-100 / QQQ-style large-cap names. Remove any ticker you do not want to track.")
 
 
 def manage_holdings_inline(holdings):
@@ -287,22 +300,24 @@ holdings = get_enriched_holdings()
 summary = portfolio_summary()
 last_sync = get_setting("last_price_sync", "Not synced yet")
 
-header_space, header_right = st.columns([4.8, .65])
-with header_right:
-    if st.button("Refresh", use_container_width=True):
+with st.sidebar:
+    if st.button("Refresh Data", use_container_width=True):
         refresh_all()
         st.rerun()
+    st.caption(f"Last sync: {last_sync}")
+    scan_limit = st.slider("Analyze symbols", min_value=10, max_value=50, value=50, step=5)
+    st.divider()
+    manage_watchlist_sidebar()
 
-left, right = st.columns([1.05, .95], gap="medium")
+left, right = st.columns([1.08, .92], gap="medium")
 
 with left:
     st.markdown('<div class="section-title">Daily Desk</div>', unsafe_allow_html=True)
-    desk = trade_desk_watchlist()
+    desk = trade_desk_watchlist(limit=scan_limit)
     if not desk.empty:
         try:
             save_daily_snapshot(desk)
         except Exception:
-            # History is useful but should never block the desk from loading.
             pass
 
     st.markdown(
@@ -332,7 +347,7 @@ with left:
             """
 <div class="card">
   <h2>No watchlist yet</h2>
-  <div class="muted">Add stocks you want the system to monitor. The desk will suggest Buy Trigger / Stop / Target automatically.</div>
+  <div class="muted">Add stocks in the sidebar. The desk will suggest Buy Trigger / Stop / Target automatically.</div>
 </div>
 """,
             unsafe_allow_html=True,
@@ -362,17 +377,13 @@ with left:
         if actionable.empty:
             st.markdown("<div class='card-compact muted'>No actionable setups today. Best action is to wait.</div>", unsafe_allow_html=True)
         else:
-            for i, (_, row) in enumerate(actionable.iterrows()):
-                compact_trade_expander(row, summary["total_value"], expanded=(i == 0))
+            render_stock_grid(actionable, summary["total_value"], expanded_first=False)
 
         st.markdown('<div class="section-title">Skip Today</div>', unsafe_allow_html=True)
         if skip.empty:
             st.markdown("<div class='card-compact muted'>No skip list right now.</div>", unsafe_allow_html=True)
         else:
-            for _, row in skip.iterrows():
-                compact_trade_expander(row, summary["total_value"], expanded=False)
-
-    manage_watchlist_inline()
+            render_stock_grid(skip, summary["total_value"], expanded_first=False)
 
 with right:
     st.markdown('<div class="section-title">Dashboard</div>', unsafe_allow_html=True)

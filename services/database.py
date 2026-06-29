@@ -5,6 +5,60 @@ DB_PATH = Path("data/portfolio.db")
 DB_PATH.parent.mkdir(exist_ok=True)
 
 
+NASDAQ_TOP_50_WATCHLIST = [
+    ('NVDA', 'NVIDIA', 5),
+    ('AAPL', 'Apple', 5),
+    ('MSFT', 'Microsoft', 5),
+    ('AMZN', 'Amazon', 5),
+    ('AVGO', 'Broadcom', 5),
+    ('META', 'Meta Platforms', 5),
+    ('GOOGL', 'Alphabet Class A', 5),
+    ('GOOG', 'Alphabet Class C', 5),
+    ('TSLA', 'Tesla', 4),
+    ('NFLX', 'Netflix', 4),
+    ('COST', 'Costco', 4),
+    ('PLTR', 'Palantir', 4),
+    ('ASML', 'ASML Holding', 4),
+    ('AMD', 'Advanced Micro Devices', 4),
+    ('CSCO', 'Cisco', 4),
+    ('TMUS', 'T-Mobile US', 4),
+    ('AZN', 'AstraZeneca', 4),
+    ('LIN', 'Linde', 4),
+    ('QCOM', 'Qualcomm', 4),
+    ('INTU', 'Intuit', 4),
+    ('AMAT', 'Applied Materials', 4),
+    ('PEP', 'PepsiCo', 4),
+    ('ISRG', 'Intuitive Surgical', 4),
+    ('BKNG', 'Booking Holdings', 4),
+    ('TXN', 'Texas Instruments', 4),
+    ('AMGN', 'Amgen', 4),
+    ('PANW', 'Palo Alto Networks', 4),
+    ('ARM', 'Arm Holdings', 4),
+    ('ADP', 'Automatic Data Processing', 4),
+    ('GILD', 'Gilead Sciences', 4),
+    ('CMCSA', 'Comcast', 3),
+    ('MU', 'Micron Technology', 4),
+    ('MELI', 'MercadoLibre', 4),
+    ('HON', 'Honeywell', 3),
+    ('LRCX', 'Lam Research', 4),
+    ('APP', 'AppLovin', 4),
+    ('CRWD', 'CrowdStrike', 4),
+    ('KLAC', 'KLA Corporation', 4),
+    ('ADI', 'Analog Devices', 3),
+    ('SBUX', 'Starbucks', 3),
+    ('MSTR', 'MicroStrategy', 3),
+    ('CDNS', 'Cadence Design Systems', 4),
+    ('SNPS', 'Synopsys', 4),
+    ('ABNB', 'Airbnb', 3),
+    ('MDLZ', 'Mondelez', 3),
+    ('REGN', 'Regeneron', 3),
+    ('MAR', 'Marriott', 3),
+    ('ORLY', 'OReilly Automotive', 3),
+    ('CTAS', 'Cintas', 3),
+    ('FTNT', 'Fortinet', 3),
+]
+
+
 def connect():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON")
@@ -108,6 +162,7 @@ def init_db():
         )
         _migrate(conn)
         _seed_if_empty(conn)
+        _seed_nasdaq_top50(conn)
 
 
 def _migrate(conn):
@@ -211,6 +266,21 @@ def _seed_if_empty(conn):
             "INSERT INTO watchlist (ticker, name, conviction) VALUES (?, ?, ?)",
             rows,
         )
+
+
+
+def _seed_nasdaq_top50(conn):
+    """Keep a practical Nasdaq-100/QQQ-style top-50 baseline in the watchlist.
+    Existing rows are preserved so user edits/removals do not get overwritten during the same session.
+    """
+    conn.executemany(
+        """
+        INSERT INTO watchlist (ticker, name, conviction)
+        VALUES (?, ?, ?)
+        ON CONFLICT(ticker) DO NOTHING
+        """,
+        NASDAQ_TOP_50_WATCHLIST,
+    )
 
 
 def set_setting(key: str, value: str):

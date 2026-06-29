@@ -61,6 +61,8 @@ def trade_desk_watchlist(limit: int | None = None) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
     rows = []
+    if limit:
+        df = df.head(int(limit)).copy()
     for _, row in df.iterrows():
         ticker = row["ticker"]
         setup = professional_trade_setup(ticker)
@@ -102,6 +104,4 @@ def trade_desk_watchlist(limit: int | None = None) -> pd.DataFrame:
     order = {"READY": 0, "REVIEW": 1, "WAIT": 2}
     result["_rank"] = result["Decision"].map(order).fillna(9)
     result = result.sort_values(["_rank", "Score", "Ticker"], ascending=[True, False, True]).drop(columns=["_rank"])
-    if limit:
-        return result.head(limit)
     return result

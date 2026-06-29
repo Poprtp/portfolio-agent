@@ -1,19 +1,17 @@
-# Portfolio OS V6.0.1 Hotfix
+# Portfolio OS V6.1 Sidebar + Nasdaq 50
 
-Fixes:
-- Prevents Decision History SQLite conflict from crashing the app.
-- Adds safer database migration for existing Streamlit Cloud databases.
-- Removes the top header/caption text from the app.
-- Keeps V6.0 features: AI Advisor, alerts, history, trade journal, one-page desk.
+Changes:
+- Daily Desk stock cards are split into two columns.
+- Watchlist management moved to the sidebar.
+- Default baseline adds 50 Nasdaq-100 / QQQ-style large-cap tickers.
+- Sidebar includes Refresh Data and Analyze Symbols controls.
+- Existing holdings, journal, history, AI Advisor, and monotone design are preserved.
 
-Update steps:
-1. Copy all files into your local `D:\Portfolio-Agent` folder and overwrite existing files.
-2. Run:
-
+Deploy:
 ```powershell
 git add .
-git commit -m "Hotfix Portfolio OS V6.0.1"
+git commit -m "Upgrade to Portfolio OS V6.1 sidebar Nasdaq watchlist"
 git push
 ```
 
-Then in Streamlit Cloud: Clear cache -> Reboot app.
+Then Streamlit Cloud: Clear cache -> Reboot app.
