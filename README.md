@@ -1,10 +1,14 @@
-# AI Portfolio OS 5.1 Simple
+# Portfolio OS 5.2 — One Page Monotone Desk
 
-Simplified portfolio dashboard and daily trade desk.
+One-page layout:
+- Left column: Daily Desk + Watchlist
+- Right column: Dashboard + Holdings
+- No sidebar
+- Monotone Black / Grey / White UI
 
-## Pages
-- Dashboard: portfolio value, P/L, holdings, add/update/delete holdings.
-- Daily Desk: watchlist + professional-style entry/stop/target suggestions.
-- Settings: database repair and notes.
-
-This app does not place trades. It is a planning and portfolio tracking tool only.
+Update:
+```powershell
+git add .
+git commit -m "Simplify to one page monotone desk"
+git push
+```
