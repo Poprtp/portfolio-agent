@@ -5,6 +5,7 @@ import streamlit as st
 from services.advisor import ai_advisor
 from services.alerts import decision_alerts
 from services.database import get_setting, init_db
+from services.discord_alerts import send_discord_alert
 from services.history import get_last_call_performance, save_daily_snapshot
 from services.journal import delete_trade, get_trade_journal, save_planned_trade, update_trade_status
 from services.market import fetch_overnight_quote
@@ -110,6 +111,13 @@ def refresh_all():
 def get_openai_key() -> str:
     try:
         return st.secrets.get("OPENAI_API_KEY", "")
+    except Exception:
+        return ""
+
+
+def get_discord_webhook() -> str:
+    try:
+        return st.secrets.get("DISCORD_WEBHOOK_URL", "")
     except Exception:
         return ""
 
@@ -400,6 +408,20 @@ with st.sidebar:
             last_ticker = list(st.session_state.overnight_quotes.keys())[-1]
             st.markdown(overnight_card_html(st.session_state.overnight_quotes[last_ticker]), unsafe_allow_html=True)
     scan_limit = st.slider("Analyze symbols", min_value=10, max_value=50, value=50, step=5)
+    with st.expander("Discord Alerts", expanded=False):
+        st.caption("Manual test uses Streamlit secret DISCORD_WEBHOOK_URL. Scheduled alerts use GitHub repository secret with the same name.")
+        if st.button("Send test Discord alert", use_container_width=True):
+            webhook = get_discord_webhook()
+            if not webhook:
+                st.error("Add DISCORD_WEBHOOK_URL to Streamlit secrets first.")
+            else:
+                test_desk = trade_desk_watchlist(limit=scan_limit if 'scan_limit' in locals() else 50)
+                ok, status = send_discord_alert(webhook, test_desk, run_label="Manual Streamlit test", include_empty=True)
+                if ok:
+                    st.success(status)
+                else:
+                    st.error(status)
+
     st.divider()
     manage_watchlist_sidebar()
 

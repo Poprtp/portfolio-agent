@@ -1,0 +1,35 @@
+name: Discord Stock Alerts
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 09:00 Bangkok daily
+    - cron: "0 2 * * *"
+    # 09:00 New York, 30 minutes before regular US market open.
+    # Both UTC slots are used because NY switches between EST and EDT.
+    - cron: "0 13 * * 1-5"
+    - cron: "0 14 * * 1-5"
+
+jobs:
+  discord-alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      SCAN_LIMIT: "50"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Send Discord alert
+        run: python scripts/send_discord_alerts.py

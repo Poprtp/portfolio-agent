@@ -1,0 +1,50 @@
+NVDA # NVIDIA
+AAPL # Apple
+MSFT # Microsoft
+AMZN # Amazon
+AVGO # Broadcom
+META # Meta Platforms
+GOOGL # Alphabet Class A
+GOOG # Alphabet Class C
+TSLA # Tesla
+NFLX # Netflix
+COST # Costco
+PLTR # Palantir
+ASML # ASML Holding
+AMD # Advanced Micro Devices
+CSCO # Cisco
+TMUS # T-Mobile US
+AZN # AstraZeneca
+LIN # Linde
+QCOM # Qualcomm
+INTU # Intuit
+AMAT # Applied Materials
+PEP # PepsiCo
+ISRG # Intuitive Surgical
+BKNG # Booking Holdings
+TXN # Texas Instruments
+AMGN # Amgen
+PANW # Palo Alto Networks
+ARM # Arm Holdings
+ADP # Automatic Data Processing
+GILD # Gilead Sciences
+CMCSA # Comcast
+MU # Micron Technology
+MELI # MercadoLibre
+HON # Honeywell
+LRCX # Lam Research
+APP # AppLovin
+CRWD # CrowdStrike
+KLAC # KLA Corporation
+ADI # Analog Devices
+SBUX # Starbucks
+MSTR # MicroStrategy
+CDNS # Cadence Design Systems
+SNPS # Synopsys
+ABNB # Airbnb
+MDLZ # Mondelez
+REGN # Regeneron
+MAR # Marriott
+ORLY # OReilly Automotive
+CTAS # Cintas
+FTNT # Fortinet
