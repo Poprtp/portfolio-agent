@@ -1,23 +1,24 @@
-# Portfolio OS 5.4 — Homework UX
+# Portfolio OS V6.0 — AI Advisor
 
-## Changes
-- One-page desk stays the same: left Daily Desk, right Dashboard.
-- Daily Desk stock rows are now collapsed by default.
-- Each row shows only ticker, decision, and score until opened.
-- Expanded view shows Buy Trigger, Stop, Target, R/R, setup explanation, and 30-minute homework checks.
-- Added 30-Min Stock Homework logic:
-  - Business clarity
-  - Growth driver
-  - Profit quality
-  - Valuation risk
-  - Exit plan
-- Combined score now blends technical setup and homework quality.
+One-page portfolio and trade desk with:
+- Daily Desk with Buy Trigger / Stop / Target
+- 30-minute stock homework logic
+- Decision History snapshots
+- Trade Journal planning
+- Alert logic
+- Optional GPT AI Advisor via `OPENAI_API_KEY`
 
 ## Deploy
+Copy files over your existing repo, then:
+
 ```powershell
 git add .
-git commit -m "Upgrade to Portfolio OS 5.4 homework UX"
+git commit -m "Upgrade to Portfolio OS V6.0 AI Advisor"
 git push
 ```
 
 Then Streamlit Cloud → Clear cache → Reboot app.
+
+## Optional GPT Advisor
+Add `OPENAI_API_KEY` in Streamlit Cloud secrets to enable GPT-generated advisor notes.
+Without a key, the app uses the built-in rule-based advisor.

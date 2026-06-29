@@ -2,7 +2,11 @@ import html
 
 import streamlit as st
 
+from services.advisor import ai_advisor
+from services.alerts import decision_alerts
 from services.database import get_setting, init_db
+from services.history import get_last_call_performance, save_daily_snapshot
+from services.journal import get_trade_journal, save_planned_trade, update_trade_status
 from services.portfolio import (
     delete_holding,
     get_enriched_holdings,
@@ -65,7 +69,7 @@ input, textarea, select {border-radius:10px !important;}
 .trigger-item b {font-size:.76rem; color:var(--text);}
 .trigger-item span {display:block; color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.06em;}
 .reason-box {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; color:var(--muted); font-size:.72rem; margin-top:6px;}
-/* make collapsed rows feel like compact cards */
+.mini-list {font-size:.72rem; color:var(--muted); line-height:1.4; white-space:pre-line;}
 [data-testid="stExpander"] {border:1px solid var(--line) !important; border-radius:13px !important; background:var(--panel) !important; margin-bottom:7px !important;}
 [data-testid="stExpander"] details summary {font-size:.84rem !important; font-weight:700 !important; color:var(--text) !important; padding:6px 4px !important;}
 [data-testid="stExpander"] details[open] summary {border-bottom:1px solid var(--line);}
@@ -81,6 +85,13 @@ def esc(value) -> str:
 
 def refresh_all():
     refresh_prices()
+
+
+def get_openai_key() -> str:
+    try:
+        return st.secrets.get("OPENAI_API_KEY", "")
+    except Exception:
+        return ""
 
 
 def setup_copy(setup: str) -> str:
@@ -104,7 +115,7 @@ def decision_line(decision: str) -> str:
     }.get(str(decision).upper(), "Review setup before acting")
 
 
-def compact_trade_expander(row, expanded=False):
+def compact_trade_expander(row, portfolio_value: float, expanded=False):
     ticker = str(row.get("Ticker", ""))
     decision = str(row.get("Decision", "WAIT"))
     score = int(row.get("Score", 0) or 0)
@@ -144,6 +155,15 @@ def compact_trade_expander(row, expanded=False):
 """,
             unsafe_allow_html=True,
         )
+
+        p1, p2 = st.columns([.7, 1.3])
+        with p1:
+            if st.button("Plan trade", use_container_width=True, key=f"plan_{ticker}"):
+                trade_id = save_planned_trade(dict(row), portfolio_value)
+                st.session_state.last_trade_action = f"Saved {ticker} as planned trade #{trade_id}"
+                st.rerun()
+        with p2:
+            st.caption("Position size is calculated at 1% portfolio risk in Trade Journal.")
 
 
 def holdings_view(df, height=235):
@@ -238,6 +258,31 @@ def manage_holdings_inline(holdings):
                     st.rerun()
 
 
+def journal_panel():
+    journal = get_trade_journal(limit=5)
+    with st.expander("Trade Journal", expanded=False):
+        if "last_trade_action" in st.session_state:
+            st.caption(st.session_state.last_trade_action)
+        if journal.empty:
+            st.caption("No planned trades yet.")
+            return
+        for _, r in journal.iterrows():
+            st.markdown(
+                f"<div class='card-compact'><b>{esc(r['ticker'])}</b> · {esc(r['status'])} · {usd(r['entry'])} / {usd(r['stop'])} / {usd(r['target'])}<br><span class='muted'>Shares {int(r['shares'])} · Score {int(r['score'])}/100 · {esc(r['created_at'])}</span></div>",
+                unsafe_allow_html=True,
+            )
+        ids = journal["id"].tolist()
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            trade_id = st.selectbox("Trade ID", ids)
+        with c2:
+            new_status = st.selectbox("Status", ["Planned", "Open", "Closed", "Cancelled"])
+        if st.button("Update trade status", use_container_width=True):
+            update_trade_status(trade_id, new_status)
+            st.session_state.last_trade_action = f"Updated trade #{trade_id} to {new_status}"
+            st.rerun()
+
+
 holdings = get_enriched_holdings()
 summary = portfolio_summary()
 last_sync = get_setting("last_price_sync", "Not synced yet")
@@ -246,7 +291,7 @@ header_left, header_mid, header_right = st.columns([1.2, 2.1, .65])
 with header_left:
     st.title("Portfolio Desk")
 with header_mid:
-    st.caption(f"One-page decision desk · Last sync: {last_sync}")
+    st.caption(f"V6.0 AI Advisor · Decision history · Alerts · Last sync: {last_sync}")
 with header_right:
     if st.button("Refresh", use_container_width=True):
         refresh_all()
@@ -257,6 +302,8 @@ left, right = st.columns([1.05, .95], gap="medium")
 with left:
     st.markdown('<div class="section-title">Daily Desk</div>', unsafe_allow_html=True)
     desk = trade_desk_watchlist()
+    if not desk.empty:
+        save_daily_snapshot(desk)
 
     st.markdown(
         """
@@ -264,6 +311,17 @@ with left:
   <div class="guide-item"><b>READY</b><div>Setup ผ่านแล้ว แต่ยังต้องคุมขนาดไม้</div></div>
   <div class="guide-item"><b>REVIEW</b><div>น่าสนใจ รอจังหวะหรือ confirmation</div></div>
   <div class="guide-item"><b>WAIT</b><div>ข้ามก่อน ไม่มี edge ชัด</div></div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    advisor_text = ai_advisor(desk, holdings, summary, get_openai_key())
+    st.markdown(
+        f"""
+<div class="card">
+  <div class="section-title">AI Advisor</div>
+  <div class="mini-list">{esc(advisor_text)}</div>
 </div>
 """,
         unsafe_allow_html=True,
@@ -305,14 +363,14 @@ with left:
             st.markdown("<div class='card-compact muted'>No actionable setups today. Best action is to wait.</div>", unsafe_allow_html=True)
         else:
             for i, (_, row) in enumerate(actionable.iterrows()):
-                compact_trade_expander(row, expanded=(i == 0))
+                compact_trade_expander(row, summary["total_value"], expanded=(i == 0))
 
         st.markdown('<div class="section-title">Skip Today</div>', unsafe_allow_html=True)
         if skip.empty:
             st.markdown("<div class='card-compact muted'>No skip list right now.</div>", unsafe_allow_html=True)
         else:
             for _, row in skip.iterrows():
-                compact_trade_expander(row, expanded=False)
+                compact_trade_expander(row, summary["total_value"], expanded=False)
 
     manage_watchlist_inline()
 
@@ -324,15 +382,30 @@ with right:
     k3.metric("Positions", str(summary["positions"]), summary["risk_label"])
 
     st.markdown('<div class="section-title">Holdings</div>', unsafe_allow_html=True)
-    holdings_view(holdings, height=228)
+    holdings_view(holdings, height=210)
 
     lower_left, lower_right = st.columns([1, .9], gap="small")
     with lower_left:
+        st.markdown('<div class="section-title">Alerts</div>', unsafe_allow_html=True)
+        for note in decision_alerts(desk, holdings)[:3]:
+            st.markdown(f"<div class='card-compact'>{esc(note)}</div>", unsafe_allow_html=True)
         st.markdown('<div class="section-title">Risk Notes</div>', unsafe_allow_html=True)
-        for note in top_risk_notes(holdings)[:3]:
+        for note in top_risk_notes(holdings)[:2]:
             st.markdown(f"<div class='card-compact'>{esc(note)}</div>", unsafe_allow_html=True)
     with lower_right:
         st.markdown('<div class="section-title">Allocation</div>', unsafe_allow_html=True)
         st.plotly_chart(allocation_chart(holdings), use_container_width=True)
 
+    perf = get_last_call_performance(limit=3)
+    with st.expander("Decision History", expanded=False):
+        if perf.empty:
+            st.caption("History starts after the first day of saved desk calls.")
+        else:
+            for _, r in perf.iterrows():
+                st.markdown(
+                    f"<div class='card-compact'><b>{esc(r['ticker'])}</b> · {esc(r['decision'])} · {r['return_pct']:+.2f}% since call<br><span class='muted'>Then {usd(r['then_price'])} · Now {usd(r['now_price'])} · {esc(r['snapshot_date'])}</span></div>",
+                    unsafe_allow_html=True,
+                )
+
+    journal_panel()
     manage_holdings_inline(holdings)

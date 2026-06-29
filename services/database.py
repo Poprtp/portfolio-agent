@@ -6,7 +6,9 @@ DB_PATH.parent.mkdir(exist_ok=True)
 
 
 def connect():
-    return sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 
 def _columns(conn, table):
@@ -64,6 +66,46 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS decision_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                snapshot_date TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                ticker TEXT NOT NULL,
+                decision TEXT DEFAULT '',
+                score INTEGER DEFAULT 0,
+                technical_score INTEGER DEFAULT 0,
+                homework_score INTEGER DEFAULT 0,
+                price REAL DEFAULT 0,
+                entry REAL DEFAULT 0,
+                stop REAL DEFAULT 0,
+                target REAL DEFAULT 0,
+                risk_reward REAL DEFAULT 0,
+                setup TEXT DEFAULT '',
+                reason TEXT DEFAULT '',
+                UNIQUE(snapshot_date, ticker)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trade_journal (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                ticker TEXT NOT NULL,
+                status TEXT DEFAULT 'Planned',
+                decision TEXT DEFAULT '',
+                score INTEGER DEFAULT 0,
+                entry REAL DEFAULT 0,
+                stop REAL DEFAULT 0,
+                target REAL DEFAULT 0,
+                shares REAL DEFAULT 0,
+                risk_reward REAL DEFAULT 0,
+                note TEXT DEFAULT ''
+            )
+            """
+        )
         _migrate(conn)
         _seed_if_empty(conn)
 
@@ -101,6 +143,29 @@ def _migrate(conn):
     for col, spec in watch_defaults.items():
         if col not in cols:
             conn.execute(f"ALTER TABLE watchlist ADD COLUMN {col} {spec}")
+
+    decision_defaults = {
+        "technical_score": "INTEGER DEFAULT 0",
+        "homework_score": "INTEGER DEFAULT 0",
+        "risk_reward": "REAL DEFAULT 0",
+        "setup": "TEXT DEFAULT ''",
+        "reason": "TEXT DEFAULT ''",
+    }
+    cols = _columns(conn, "decision_history")
+    for col, spec in decision_defaults.items():
+        if col not in cols:
+            conn.execute(f"ALTER TABLE decision_history ADD COLUMN {col} {spec}")
+
+    journal_defaults = {
+        "decision": "TEXT DEFAULT ''",
+        "score": "INTEGER DEFAULT 0",
+        "risk_reward": "REAL DEFAULT 0",
+        "note": "TEXT DEFAULT ''",
+    }
+    cols = _columns(conn, "trade_journal")
+    for col, spec in journal_defaults.items():
+        if col not in cols:
+            conn.execute(f"ALTER TABLE trade_journal ADD COLUMN {col} {spec}")
 
 
 def _seed_if_empty(conn):
