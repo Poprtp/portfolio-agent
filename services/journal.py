@@ -13,12 +13,12 @@ def _calc_shares(entry: float, stop: float, portfolio_value: float, risk_pct: fl
     return max(0, int(risk_budget // risk))
 
 
-def save_planned_trade(row: dict, portfolio_value: float, note: str = "") -> int:
+def save_planned_trade(row: dict, portfolio_value: float, note: str = "", risk_pct: float = 1.0) -> int:
     ticker = str(row.get("Ticker", "")).upper().strip()
     entry = float(row.get("Entry", 0) or 0)
     stop = float(row.get("Stop", 0) or 0)
     target = float(row.get("Target", 0) or 0)
-    shares = _calc_shares(entry, stop, float(portfolio_value or 0), 1.0)
+    shares = _calc_shares(entry, stop, float(portfolio_value or 0), float(risk_pct or 1.0))
     with connect() as conn:
         cur = conn.execute(
             """

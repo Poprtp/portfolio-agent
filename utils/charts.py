@@ -17,10 +17,10 @@ except Exception:  # pragma: no cover
 MONO_COLORS = ["#f5f5f5", "#d4d4d4", "#a3a3a3", "#737373", "#525252", "#404040", "#262626"]
 
 
-def empty_chart(message: str = "No chart data yet"):
+def empty_chart(message: str = "No chart data yet", height: int = 260):
     fig = go.Figure()
     fig.update_layout(
-        height=210,
+        height=height,
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -48,7 +48,7 @@ def allocation_chart(df):
     fig = px.pie(df, values="market_value", names="ticker", hole=0.72, color_discrete_sequence=MONO_COLORS)
     fig.update_traces(textinfo="percent", textfont_size=10, marker=dict(line=dict(color="#050505", width=2)))
     fig.update_layout(
-        height=210,
+        height=height,
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=True,
         legend=dict(orientation="v", yanchor="middle", y=0.5, xanchor="left", x=1.02, font=dict(size=10, color="#d4d4d4")),
@@ -74,14 +74,14 @@ def _close_history(ticker: str, period: str = "3mo") -> pd.Series:
         return pd.Series(dtype=float)
 
 
-def pnl_line_chart(df, period: str = "3mo"):
+def pnl_line_chart(df, period: str = "3mo", height: int = 340):
     """Plot portfolio unrealized P/L trend from holding cost basis and historical close prices.
 
     This replaces the allocation donut with a more useful risk-management view.
     The line is an estimate based on current shares and average cost, not a full cash-flow adjusted performance chart.
     """
     if df.empty or not {"ticker", "shares", "avg_cost"}.issubset(df.columns):
-        return empty_chart("No P/L trend data yet")
+        return empty_chart("No P/L trend data yet", height=height)
 
     total_pnl = None
     used = 0
@@ -103,7 +103,7 @@ def pnl_line_chart(df, period: str = "3mo"):
         used += 1
 
     if total_pnl is None or total_pnl.empty:
-        return empty_chart("No historical P/L data available")
+        return empty_chart("No historical P/L data available", height=height)
 
     chart_df = total_pnl.sort_index().reset_index()
     chart_df.columns = ["date", "pnl"]
@@ -122,8 +122,8 @@ def pnl_line_chart(df, period: str = "3mo"):
     )
     fig.add_hline(y=0, line_width=1, line_dash="dot", line_color="#737373")
     fig.update_layout(
-        height=230,
-        margin=dict(l=0, r=0, t=4, b=0),
+        height=height,
+        margin=dict(l=0, r=0, t=8, b=0),
         showlegend=False,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",

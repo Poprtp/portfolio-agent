@@ -9,6 +9,7 @@ from services.discord_alerts import alert_filter_settings, send_discord_alert
 from services.history import get_last_call_performance, save_daily_snapshot
 from services.journal import delete_trade, get_trade_journal, save_planned_trade, update_trade_status
 from services.market import fetch_overnight_quote
+from services.risk import calculate_trade_risk, risk_note_for_journal
 from services.portfolio import (
     delete_holding,
     get_enriched_holdings,
@@ -85,6 +86,9 @@ input, textarea, select {border-radius:10px !important;}
 .overnight-card {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-top:6px;}
 .overnight-card b {color:var(--text); font-size:.82rem;}
 .overnight-card span {color:var(--muted); font-size:.66rem; text-transform:uppercase; letter-spacing:.06em;}
+.risk-card {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-top:6px;}
+.risk-card b {color:var(--text); font-size:.8rem;}
+.risk-card span {color:var(--muted); font-size:.66rem; text-transform:uppercase; letter-spacing:.06em;}
 @media (min-width: 1200px) {
   .homework-grid {grid-template-columns:repeat(3, minmax(0, 1fr));}
   .trigger-grid {grid-template-columns:repeat(4, minmax(0, 1fr));}
@@ -178,13 +182,28 @@ def overnight_widget(ticker: str, fallback_price: float, key_suffix: str):
 
 def decision_line(decision: str) -> str:
     return {
-        "READY": "เข้าเงื่อนไขให้พิจารณา ไม่ใช่คำสั่งซื้อ ต้องเช็กขนาดไม้และความเสี่ยงก่อน",
+        "READY": "เข้าเงื่อนไขให้พิจารณา ไม่ใช่คำสั่งซื้อ ต้องให้ AI Risk Plan ผ่านก่อน",
         "REVIEW": "น่าสนใจ แต่รอจังหวะหรือ confirmation เพิ่ม",
         "WAIT": "ข้ามก่อน ยังไม่มี edge ชัดพอสำหรับวันนี้",
     }.get(str(decision).upper(), "Review setup before acting")
 
 
-def compact_trade_expander(row, portfolio_value: float, expanded=False):
+
+def risk_card_html(plan: dict) -> str:
+    status = esc(plan.get("status", ""))
+    note = esc(plan.get("note", ""))
+    shares = int(plan.get("suggested_shares", 0) or 0)
+    return f"""
+<div class="risk-card">
+  <span>AI Risk Plan</span><br>
+  <b>{status}</b> · Suggested <b>{shares}</b> shares<br>
+  <div class="muted">Capital {usd(plan.get('capital_needed', 0))} · Max loss {usd(plan.get('max_loss', 0))} ({plan.get('max_loss_pct', 0):.2f}%) · Position {plan.get('position_pct', 0):.1f}%</div>
+  <div class="muted">Risk/share {usd(plan.get('risk_per_share', 0))} · Stop distance {plan.get('stop_distance_pct', 0):.1f}% · Trigger distance {plan.get('trigger_distance_pct', 0):.1f}%</div>
+  <div class="muted">{note}</div>
+</div>
+"""
+
+def compact_trade_expander(row, portfolio_value: float, holdings=None, expanded=False):
     ticker = str(row.get("Ticker", ""))
     decision = str(row.get("Decision", "WAIT"))
     score = int(row.get("Score", 0) or 0)
@@ -212,6 +231,15 @@ def compact_trade_expander(row, portfolio_value: float, expanded=False):
             unsafe_allow_html=True,
         )
 
+        risk_plan = calculate_trade_risk(
+            dict(row),
+            portfolio_value,
+            holdings,
+            risk_pct=st.session_state.get("risk_per_trade_pct", 1.0),
+            max_position_pct=st.session_state.get("max_position_pct", 15.0),
+        )
+        st.markdown(risk_card_html(risk_plan), unsafe_allow_html=True)
+
         overnight_widget(ticker, row.get("Price", 0), "card")
 
         st.markdown(
@@ -230,25 +258,30 @@ def compact_trade_expander(row, portfolio_value: float, expanded=False):
 
         p1, p2 = st.columns([.95, 1.05])
         with p1:
-            can_plan = decision in ["READY", "REVIEW"]
-            plan_label = "Save to Trade Journal" if can_plan else "WAIT - no trade plan"
+            can_plan = decision in ["READY", "REVIEW"] and int(risk_plan.get("suggested_shares", 0) or 0) > 0 and risk_plan.get("status") not in ["SKIP", "WAIT"]
+            plan_label = "Save Risk Plan" if can_plan else "Risk blocks trade"
             if st.button(plan_label, use_container_width=True, key=f"plan_{ticker}", disabled=not can_plan):
-                trade_id = save_planned_trade(dict(row), portfolio_value)
-                st.session_state.last_trade_action = f"Saved {ticker} as planned trade #{trade_id}"
+                trade_id = save_planned_trade(
+                    dict(row),
+                    portfolio_value,
+                    note=risk_note_for_journal(risk_plan),
+                    risk_pct=st.session_state.get("risk_per_trade_pct", 1.0),
+                )
+                st.session_state.last_trade_action = f"Saved {ticker} risk plan #{trade_id}"
                 st.session_state.last_trade_ticker = ticker
                 st.session_state.open_trade_journal = True
                 st.rerun()
         with p2:
-            st.caption("Saves Entry / Stop / Target as a planned trade. It does not execute an order.")
+            st.caption("AI calculates size from Entry / Stop. Journal saves a plan only; it does not execute an order.")
 
 
-def render_stock_grid(df, portfolio_value: float, expanded_first=False):
+def render_stock_grid(df, portfolio_value: float, holdings=None, expanded_first=False):
     if df.empty:
         return
     cols = st.columns(2, gap="small")
     for i, (_, row) in enumerate(df.iterrows()):
         with cols[i % 2]:
-            compact_trade_expander(row, portfolio_value, expanded=(expanded_first and i == 0))
+            compact_trade_expander(row, portfolio_value, holdings=holdings, expanded=(expanded_first and i == 0))
 
 
 def holdings_view(df, height=235):
@@ -354,7 +387,7 @@ def journal_panel():
 
         for _, r in journal.iterrows():
             st.markdown(
-                f"<div class='card-compact'><b>#{int(r['id'])} · {esc(r['ticker'])}</b> · {esc(r['status'])} · {usd(r['entry'])} / {usd(r['stop'])} / {usd(r['target'])}<br><span class='muted'>Shares {int(r['shares'])} · Score {int(r['score'])}/100 · {esc(r['created_at'])}</span></div>",
+                f"<div class='card-compact'><b>#{int(r['id'])} · {esc(r['ticker'])}</b> · {esc(r['status'])} · {usd(r['entry'])} / {usd(r['stop'])} / {usd(r['target'])}<br><span class='muted'>Shares {int(r['shares'])} · Score {int(r['score'])}/100 · {esc(r['created_at'])}</span><br><span class='muted'>{esc(str(r.get('note', ""))[:110])}</span></div>",
                 unsafe_allow_html=True,
             )
 
@@ -408,6 +441,12 @@ with st.sidebar:
             last_ticker = list(st.session_state.overnight_quotes.keys())[-1]
             st.markdown(overnight_card_html(st.session_state.overnight_quotes[last_ticker]), unsafe_allow_html=True)
     scan_limit = st.slider("Analyze symbols", min_value=10, max_value=50, value=50, step=5)
+    with st.expander("AI Risk Engine", expanded=False):
+        st.caption("AI calculates position size from Portfolio value + Buy Trigger + Stop. Default uses professional risk-first sizing.")
+        st.slider("Max risk per trade (%)", min_value=0.25, max_value=2.0, value=1.0, step=0.25, key="risk_per_trade_pct")
+        st.slider("Max position size (%)", min_value=5.0, max_value=30.0, value=15.0, step=1.0, key="max_position_pct")
+        risk_budget_preview = summary["total_value"] * st.session_state.get("risk_per_trade_pct", 1.0) / 100
+        st.caption(f"Current risk budget/trade: {usd(risk_budget_preview)}")
     with st.expander("Discord Alerts", expanded=False):
         st.caption("Manual test uses Streamlit secret DISCORD_WEBHOOK_URL. Scheduled alerts use GitHub repository secret with the same name.")
         settings = alert_filter_settings()
@@ -448,7 +487,7 @@ with left:
     st.markdown(
         """
 <div class="guide">
-  <div class="guide-item"><b>READY</b><div>ไม่ใช่คำสั่งซื้อ — เช็กขนาดไม้และ risk ก่อน</div></div>
+  <div class="guide-item"><b>READY</b><div>Setup ผ่าน แต่ต้องให้ AI Risk Plan ผ่านก่อน</div></div>
   <div class="guide-item"><b>REVIEW</b><div>น่าสนใจ รอจังหวะหรือ confirmation</div></div>
   <div class="guide-item"><b>WAIT</b><div>ข้ามก่อน ไม่มี edge ชัด</div></div>
 </div>
@@ -493,6 +532,7 @@ with left:
   <div class="muted">{esc(best['Setup'])} · Score {best['Score']}/100 · R/R {best['R/R']}R</div>
   <hr>
   <div class="muted">{esc(decision_line(decision))}</div>
+  <div class="muted">AI จะคำนวณ suggested shares / max loss / position size ในการ์ดหุ้นแต่ละตัว</div>
 </div>
 """,
             unsafe_allow_html=True,
@@ -502,13 +542,13 @@ with left:
         if actionable.empty:
             st.markdown("<div class='card-compact muted'>No actionable setups today. Best action is to wait.</div>", unsafe_allow_html=True)
         else:
-            render_stock_grid(actionable, summary["total_value"], expanded_first=False)
+            render_stock_grid(actionable, summary["total_value"], holdings=holdings, expanded_first=False)
 
         st.markdown('<div class="section-title">Skip Today</div>', unsafe_allow_html=True)
         if skip.empty:
             st.markdown("<div class='card-compact muted'>No skip list right now.</div>", unsafe_allow_html=True)
         else:
-            render_stock_grid(skip, summary["total_value"], expanded_first=False)
+            render_stock_grid(skip, summary["total_value"], holdings=holdings, expanded_first=False)
 
 with right:
     st.markdown('<div class="section-title">Dashboard</div>', unsafe_allow_html=True)
@@ -517,20 +557,21 @@ with right:
     k2.metric("P/L", usd(summary["total_gain_loss"]), pct(summary["total_return_pct"]))
     k3.metric("Positions", str(summary["positions"]), summary["risk_label"])
 
-    st.markdown('<div class="section-title">Holdings</div>', unsafe_allow_html=True)
-    holdings_view(holdings, height=210)
+    st.markdown('<div class="section-title">P/L Trend</div>', unsafe_allow_html=True)
+    st.plotly_chart(pnl_line_chart(holdings, period="3mo", height=340), use_container_width=True)
 
-    lower_left, lower_right = st.columns([1, .9], gap="small")
+    st.markdown('<div class="section-title">Holdings</div>', unsafe_allow_html=True)
+    holdings_view(holdings, height=190)
+
+    lower_left, lower_right = st.columns([1, 1], gap="small")
     with lower_left:
         st.markdown('<div class="section-title">Alerts</div>', unsafe_allow_html=True)
         for note in decision_alerts(desk, holdings)[:3]:
             st.markdown(f"<div class='card-compact'>{esc(note)}</div>", unsafe_allow_html=True)
+    with lower_right:
         st.markdown('<div class="section-title">Risk Notes</div>', unsafe_allow_html=True)
         for note in top_risk_notes(holdings)[:2]:
             st.markdown(f"<div class='card-compact'>{esc(note)}</div>", unsafe_allow_html=True)
-    with lower_right:
-        st.markdown('<div class="section-title">P/L Trend</div>', unsafe_allow_html=True)
-        st.plotly_chart(pnl_line_chart(holdings, period="3mo"), use_container_width=True)
 
     perf = get_last_call_performance(limit=3)
     with st.expander("Decision History", expanded=False):
