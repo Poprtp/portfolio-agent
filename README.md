@@ -1,18 +1,10 @@
-# AI Portfolio OS V5.0 — Daily Trade Desk
+# AI Portfolio OS 5.1 Simple
 
-Compact daily decision dashboard for stock trading.
+Simplified portfolio dashboard and daily trade desk.
 
-## What changed
-- Added Daily Desk as the first page.
-- Shows what to focus on and what to ignore in one screen.
-- Uses professional trader logic: capital protection, clear setup, no chasing, defined risk.
-- Keeps detailed pages available but makes Daily Desk the primary decision page.
+## Pages
+- Dashboard: portfolio value, P/L, holdings, add/update/delete holdings.
+- Daily Desk: watchlist + professional-style entry/stop/target suggestions.
+- Settings: database repair and notes.
 
-## Update steps
-```powershell
-git add .
-git commit -m "Upgrade to Portfolio OS 5.0 daily trade desk"
-git push
-```
-
-Then reboot the Streamlit app.
+This app does not place trades. It is a planning and portfolio tracking tool only.

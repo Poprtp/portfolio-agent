@@ -10,10 +10,3 @@ def pct(value):
         return f"{float(value):.1f}%"
     except Exception:
         return "0.0%"
-
-
-def num(value, digits=2):
-    try:
-        return f"{float(value):,.{digits}f}"
-    except Exception:
-        return "0.00"

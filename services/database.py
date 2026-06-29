@@ -64,30 +64,6 @@ def init_db():
             )
             """
         )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS trade_journal (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at TEXT NOT NULL,
-                ticker TEXT NOT NULL,
-                status TEXT DEFAULT 'Planned',
-                entry REAL DEFAULT 0,
-                stop REAL DEFAULT 0,
-                target REAL DEFAULT 0,
-                shares REAL DEFAULT 0,
-                capital_needed REAL DEFAULT 0,
-                max_loss REAL DEFAULT 0,
-                max_gain REAL DEFAULT 0,
-                risk_reward REAL DEFAULT 0,
-                setup_status TEXT DEFAULT '',
-                checklist_score INTEGER DEFAULT 0,
-                readiness TEXT DEFAULT '',
-                thesis TEXT DEFAULT '',
-                exit_plan TEXT DEFAULT '',
-                note TEXT DEFAULT ''
-            )
-            """
-        )
         _migrate(conn)
         _seed_if_empty(conn)
 
@@ -126,17 +102,6 @@ def _migrate(conn):
         if col not in cols:
             conn.execute(f"ALTER TABLE watchlist ADD COLUMN {col} {spec}")
 
-    trade_defaults = {
-        "checklist_score": "INTEGER DEFAULT 0",
-        "readiness": "TEXT DEFAULT ''",
-        "thesis": "TEXT DEFAULT ''",
-        "exit_plan": "TEXT DEFAULT ''",
-    }
-    cols = _columns(conn, "trade_journal")
-    for col, spec in trade_defaults.items():
-        if col not in cols:
-            conn.execute(f"ALTER TABLE trade_journal ADD COLUMN {col} {spec}")
-
 
 def _seed_if_empty(conn):
     hcount = conn.execute("SELECT COUNT(*) FROM holdings").fetchone()[0]
@@ -148,27 +113,17 @@ def _seed_if_empty(conn):
             """,
             ("QQQI", "NEOS Nasdaq-100 High Income ETF", 132, 52, 54.69, 35, "ETF", "Income ETF"),
         )
-        conn.execute(
-            """
-            INSERT INTO holdings (ticker, name, shares, avg_cost, current_price, target_weight, asset_type, sector)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            ("CASH", "Cash", 10, 1, 1, 10, "Cash", "Cash"),
-        )
 
     wcount = conn.execute("SELECT COUNT(*) FROM watchlist").fetchone()[0]
     if wcount == 0:
         rows = [
-            ("TSM", "Taiwan Semiconductor ADR", 370, 390, 5, "AI infrastructure leader", 432.35),
-            ("MSFT", "Microsoft", 420, 380, 4, "Quality compounder", 372.97),
-            ("NVDA", "NVIDIA", 160, 170, 4, "AI leader, valuation sensitive", 192.53),
-            ("AVGO", "Broadcom", 330, 340, 4, "AI networking and ASIC", 365.02),
+            ("TSM", "Taiwan Semiconductor ADR", 5),
+            ("MSFT", "Microsoft", 4),
+            ("NVDA", "NVIDIA", 4),
+            ("AVGO", "Broadcom", 4),
         ]
         conn.executemany(
-            """
-            INSERT INTO watchlist (ticker, name, fair_value, target_buy_price, conviction, note, current_price)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
+            "INSERT INTO watchlist (ticker, name, conviction) VALUES (?, ?, ?)",
             rows,
         )
 
