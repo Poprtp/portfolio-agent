@@ -65,3 +65,9 @@ Then Streamlit Cloud: Clear cache -> Reboot app.
 4. Push the project. GitHub Actions will run from `.github/workflows/discord-alerts.yml`.
 
 Note: GitHub Actions cannot read Streamlit Cloud's local SQLite database. Scheduled alerts use `config/alert_watchlist.txt`, while the live web app uses its own app watchlist.
+
+
+## V6.2.1 Discord import hotfix
+- Fixed GitHub Actions `ModuleNotFoundError: No module named services` by adding the repository root to Python path.
+- Added `PYTHONPATH` to the Discord workflow for extra stability.
+- Manual workflow runs now include an empty-result message so the Discord webhook can be tested even when no READY/REVIEW setups are found.

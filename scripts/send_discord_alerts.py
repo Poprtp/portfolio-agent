@@ -1,7 +1,15 @@
 import argparse
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
+
+# GitHub Actions executes this file from scripts/, so add the repo root
+# to Python's import path before importing local service modules.
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from services.database import init_db
 from services.discord_alerts import load_alert_watchlist, send_discord_alert
