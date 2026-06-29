@@ -68,3 +68,98 @@ def get_symbol_profile(ticker: str) -> dict:
     except Exception:
         pass
     return profile
+
+
+
+@cache_data
+def fetch_overnight_quote(ticker: str, fallback: float = 0.0) -> dict:
+    """Return an extended-hours quote when yfinance exposes one.
+
+    This is best-effort data. Yahoo/yfinance availability differs by symbol,
+    session, and market state. If no pre/post quote is available, the function
+    falls back to the latest quote from 1-minute prepost history.
+    """
+    ticker = str(ticker or "").upper().strip()
+    base_fallback = float(fallback or 0)
+    result = {
+        "ticker": ticker,
+        "label": "Unavailable",
+        "market_state": "Unknown",
+        "regular_price": base_fallback,
+        "overnight_price": None,
+        "change": None,
+        "change_pct": None,
+        "source": "fallback",
+        "note": "No extended-hours quote available from provider.",
+    }
+    if not ticker:
+        return result
+
+    try:
+        symbol = yf.Ticker(ticker)
+        info = {}
+        try:
+            info = symbol.get_info() or {}
+        except Exception:
+            info = {}
+
+        state = str(info.get("marketState", "Unknown") or "Unknown").upper()
+        regular = (
+            info.get("regularMarketPrice")
+            or info.get("currentPrice")
+            or info.get("previousClose")
+            or base_fallback
+        )
+        previous_close = info.get("regularMarketPreviousClose") or info.get("previousClose") or regular or base_fallback
+        pre = info.get("preMarketPrice")
+        post = info.get("postMarketPrice")
+
+        label = "Latest quote"
+        extended = None
+        if state.startswith("PRE") and pre:
+            extended = float(pre)
+            label = "Pre-market"
+        elif state.startswith("POST") and post:
+            extended = float(post)
+            label = "After-hours"
+        elif post:
+            extended = float(post)
+            label = "After-hours"
+        elif pre:
+            extended = float(pre)
+            label = "Pre-market"
+
+        if extended is None:
+            try:
+                hist = symbol.history(period="5d", interval="1m", prepost=True)
+                if not hist.empty:
+                    close = hist["Close"].dropna()
+                    if not close.empty:
+                        extended = float(close.iloc[-1])
+                        label = "Extended / latest"
+            except Exception:
+                pass
+
+        regular = float(regular or previous_close or base_fallback or 0)
+        if regular <= 0 and previous_close:
+            regular = float(previous_close or 0)
+
+        result.update(
+            {
+                "label": label if extended is not None else "Unavailable",
+                "market_state": state,
+                "regular_price": round(regular, 2) if regular else base_fallback,
+                "overnight_price": round(float(extended), 2) if extended is not None else None,
+                "source": "yfinance",
+            }
+        )
+
+        if extended is not None and regular:
+            change = float(extended) - regular
+            result["change"] = round(change, 2)
+            result["change_pct"] = round(change / regular * 100, 2)
+            result["note"] = "Extended-hours quote. May be delayed or unavailable for some symbols."
+        return result
+    except Exception as exc:
+        result["note"] = f"Unable to fetch extended-hours quote: {exc}"
+        return result

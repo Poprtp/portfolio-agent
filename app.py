@@ -6,7 +6,8 @@ from services.advisor import ai_advisor
 from services.alerts import decision_alerts
 from services.database import get_setting, init_db
 from services.history import get_last_call_performance, save_daily_snapshot
-from services.journal import get_trade_journal, save_planned_trade, update_trade_status
+from services.journal import delete_trade, get_trade_journal, save_planned_trade, update_trade_status
+from services.market import fetch_overnight_quote
 from services.portfolio import (
     delete_holding,
     get_enriched_holdings,
@@ -75,6 +76,12 @@ input, textarea, select {border-radius:10px !important;}
 [data-testid="stExpander"] details summary {font-size:.80rem !important; font-weight:700 !important; color:var(--text) !important; padding:5px 4px !important;}
 [data-testid="stExpander"] details[open] summary {border-bottom:1px solid var(--line);}
 .sidebar-note {font-size:.7rem; color:var(--muted); line-height:1.35;}
+.success-card {background:#f5f5f5; color:#050505; border:1px solid #f5f5f5; border-radius:12px; padding:9px 11px; margin:7px 0;}
+.success-card b {color:#050505;}
+.success-card span {color:#525252; font-size:.72rem;}
+.overnight-card {background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-top:6px;}
+.overnight-card b {color:var(--text); font-size:.82rem;}
+.overnight-card span {color:var(--muted); font-size:.66rem; text-transform:uppercase; letter-spacing:.06em;}
 @media (min-width: 1200px) {
   .homework-grid {grid-template-columns:repeat(3, minmax(0, 1fr));}
   .trigger-grid {grid-template-columns:repeat(4, minmax(0, 1fr));}
@@ -118,6 +125,47 @@ def setup_copy(setup: str) -> str:
     return "ใช้เป็นระดับอ้างอิง ต้องเช็กกราฟก่อนตัดสินใจ"
 
 
+
+
+def overnight_card_html(quote: dict) -> str:
+    ticker = esc(quote.get("ticker", ""))
+    label = esc(quote.get("label", "Overnight"))
+    state = esc(quote.get("market_state", "Unknown"))
+    note = esc(quote.get("note", ""))
+    price = quote.get("overnight_price")
+    regular = quote.get("regular_price")
+    change = quote.get("change")
+    change_pct = quote.get("change_pct")
+    if price is None:
+        main = "No extended quote available"
+        sub = note
+    else:
+        delta = ""
+        if change is not None and change_pct is not None:
+            sign = "+" if change >= 0 else ""
+            delta = f" · {sign}{change:.2f} / {sign}{change_pct:.2f}% vs regular"
+        main = f"{label}: {usd(price)}"
+        sub = f"Regular: {usd(regular)}{delta} · State: {state}"
+    return f"""
+<div class="overnight-card">
+  <span>{ticker} Overnight / Extended</span><br>
+  <b>{main}</b><br>
+  <div class="muted">{sub}</div>
+</div>
+"""
+
+
+def overnight_widget(ticker: str, fallback_price: float, key_suffix: str):
+    if "overnight_quotes" not in st.session_state:
+        st.session_state.overnight_quotes = {}
+    quote = st.session_state.overnight_quotes.get(ticker)
+    if quote:
+        st.markdown(overnight_card_html(quote), unsafe_allow_html=True)
+    if st.button("Fetch overnight price", use_container_width=True, key=f"overnight_{ticker}_{key_suffix}"):
+        st.session_state.overnight_quotes[ticker] = fetch_overnight_quote(ticker, fallback_price)
+        st.session_state.open_ticker = ticker
+        st.rerun()
+
 def decision_line(decision: str) -> str:
     return {
         "READY": "Setup ใช้ได้แล้ว เช็กขนาดไม้และความเสี่ยงก่อนเข้า",
@@ -134,6 +182,7 @@ def compact_trade_expander(row, portfolio_value: float, expanded=False):
     level_icon = "●" if decision == "READY" else "◐" if decision == "REVIEW" else "○"
     header = f"{level_icon} {ticker} · {decision} · Score {score}/100"
 
+    expanded = expanded or st.session_state.get("open_ticker") == ticker
     with st.expander(header, expanded=expanded):
         trigger_label = "Buy Trigger" if decision != "WAIT" else "Reference Trigger"
         st.markdown(
@@ -153,6 +202,8 @@ def compact_trade_expander(row, portfolio_value: float, expanded=False):
             unsafe_allow_html=True,
         )
 
+        overnight_widget(ticker, row.get("Price", 0), "card")
+
         st.markdown(
             f"""
 <div class="homework-grid">
@@ -167,14 +218,18 @@ def compact_trade_expander(row, portfolio_value: float, expanded=False):
             unsafe_allow_html=True,
         )
 
-        p1, p2 = st.columns([.75, 1.25])
+        p1, p2 = st.columns([.95, 1.05])
         with p1:
-            if st.button("Plan trade", use_container_width=True, key=f"plan_{ticker}"):
+            can_plan = decision in ["READY", "REVIEW"]
+            plan_label = "Save to Trade Journal" if can_plan else "WAIT - no trade plan"
+            if st.button(plan_label, use_container_width=True, key=f"plan_{ticker}", disabled=not can_plan):
                 trade_id = save_planned_trade(dict(row), portfolio_value)
                 st.session_state.last_trade_action = f"Saved {ticker} as planned trade #{trade_id}"
+                st.session_state.last_trade_ticker = ticker
+                st.session_state.open_trade_journal = True
                 st.rerun()
         with p2:
-            st.caption("Position size is calculated at 1% portfolio risk in Trade Journal.")
+            st.caption("Saves Entry / Stop / Target as a planned trade. It does not execute an order.")
 
 
 def render_stock_grid(df, portfolio_value: float, expanded_first=False):
@@ -277,28 +332,47 @@ def manage_holdings_inline(holdings):
 
 
 def journal_panel():
-    journal = get_trade_journal(limit=5)
-    with st.expander("Trade Journal", expanded=False):
+    journal = get_trade_journal(limit=10)
+    expanded = bool(st.session_state.get("open_trade_journal", False))
+    with st.expander("Trade Journal", expanded=expanded):
+        st.caption("Trade Journal is a planning log only. It does not buy or sell automatically.")
         if "last_trade_action" in st.session_state:
             st.caption(st.session_state.last_trade_action)
         if journal.empty:
             st.caption("No planned trades yet.")
             return
+
         for _, r in journal.iterrows():
             st.markdown(
-                f"<div class='card-compact'><b>{esc(r['ticker'])}</b> · {esc(r['status'])} · {usd(r['entry'])} / {usd(r['stop'])} / {usd(r['target'])}<br><span class='muted'>Shares {int(r['shares'])} · Score {int(r['score'])}/100 · {esc(r['created_at'])}</span></div>",
+                f"<div class='card-compact'><b>#{int(r['id'])} · {esc(r['ticker'])}</b> · {esc(r['status'])} · {usd(r['entry'])} / {usd(r['stop'])} / {usd(r['target'])}<br><span class='muted'>Shares {int(r['shares'])} · Score {int(r['score'])}/100 · {esc(r['created_at'])}</span></div>",
                 unsafe_allow_html=True,
             )
+
         ids = journal["id"].tolist()
+        selected_id = st.selectbox(
+            "Select planned trade",
+            ids,
+            format_func=lambda x: f"#{int(x)} · {journal.loc[journal['id'] == x, 'ticker'].iloc[0]} · {journal.loc[journal['id'] == x, 'status'].iloc[0]}",
+            key="trade_journal_selected_id",
+        )
+
         c1, c2 = st.columns([1, 1])
         with c1:
-            trade_id = st.selectbox("Trade ID", ids)
+            new_status = st.selectbox("Status", ["Planned", "Open", "Closed", "Cancelled"], key="trade_status_select")
+            if st.button("Update status", use_container_width=True):
+                update_trade_status(selected_id, new_status)
+                st.session_state.last_trade_action = f"Updated trade #{int(selected_id)} to {new_status}"
+                st.session_state.open_trade_journal = True
+                st.rerun()
         with c2:
-            new_status = st.selectbox("Status", ["Planned", "Open", "Closed", "Cancelled"])
-        if st.button("Update trade status", use_container_width=True):
-            update_trade_status(trade_id, new_status)
-            st.session_state.last_trade_action = f"Updated trade #{trade_id} to {new_status}"
-            st.rerun()
+            st.caption("Delete removes the planned trade from this journal.")
+            confirm_delete = st.checkbox("Confirm delete", key=f"confirm_delete_trade_{selected_id}")
+            if st.button("Delete selected trade", use_container_width=True, disabled=not confirm_delete):
+                ticker = journal.loc[journal["id"] == selected_id, "ticker"].iloc[0]
+                delete_trade(selected_id)
+                st.session_state.last_trade_action = f"Deleted planned trade #{int(selected_id)} · {ticker}"
+                st.session_state.open_trade_journal = True
+                st.rerun()
 
 
 holdings = get_enriched_holdings()
@@ -310,6 +384,19 @@ with st.sidebar:
         refresh_all()
         st.rerun()
     st.caption(f"Last sync: {last_sync}")
+    with st.expander("Overnight Quote", expanded=False):
+        st.caption("Fetch pre-market / after-hours price when provider data is available.")
+        with st.form("overnight_sidebar_form"):
+            overnight_symbol = st.text_input("Ticker", value="", placeholder="e.g. NVDA").upper().strip()
+            fetch_overnight_clicked = st.form_submit_button("Fetch overnight", use_container_width=True)
+            if fetch_overnight_clicked and overnight_symbol:
+                st.session_state.overnight_quotes = st.session_state.get("overnight_quotes", {})
+                st.session_state.overnight_quotes[overnight_symbol] = fetch_overnight_quote(overnight_symbol, 0)
+                st.session_state.open_ticker = overnight_symbol
+                st.rerun()
+        if "overnight_quotes" in st.session_state and st.session_state.overnight_quotes:
+            last_ticker = list(st.session_state.overnight_quotes.keys())[-1]
+            st.markdown(overnight_card_html(st.session_state.overnight_quotes[last_ticker]), unsafe_allow_html=True)
     scan_limit = st.slider("Analyze symbols", min_value=10, max_value=50, value=50, step=5)
     st.divider()
     manage_watchlist_sidebar()
@@ -318,6 +405,13 @@ left, right = st.columns([1.08, .92], gap="medium")
 
 with left:
     st.markdown('<div class="section-title">Daily Desk</div>', unsafe_allow_html=True)
+    if "last_trade_action" in st.session_state and st.session_state.get("open_trade_journal", False):
+        st.markdown(
+            f"""
+<div class="success-card"><b>{esc(st.session_state.last_trade_action)}</b><br><span>Saved under Trade Journal on the right. This is only a planned trade, not an executed order.</span></div>
+""",
+            unsafe_allow_html=True,
+        )
     desk = trade_desk_watchlist(limit=scan_limit)
     if not desk.empty:
         try:

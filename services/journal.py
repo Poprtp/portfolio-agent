@@ -60,3 +60,8 @@ def get_trade_journal(limit: int = 5) -> pd.DataFrame:
 def update_trade_status(trade_id: int, status: str):
     with connect() as conn:
         conn.execute("UPDATE trade_journal SET status=? WHERE id=?", (status, int(trade_id)))
+
+
+def delete_trade(trade_id: int):
+    with connect() as conn:
+        conn.execute("DELETE FROM trade_journal WHERE id=?", (int(trade_id),))

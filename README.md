@@ -21,3 +21,24 @@ Then Streamlit Cloud: Clear cache -> Reboot app.
 - Added more top spacing so the top summary row is fully visible
 - Fixed stock card overflow inside Daily Desk expanders
 - Made trigger/homework blocks responsive to the column width
+
+
+## V6.1.2 Plan Trade UX
+- Renamed Plan trade to Save to Trade Journal.
+- Shows a visible confirmation after saving a planned trade.
+- Automatically opens Trade Journal after saving.
+- Clarifies that saved plans do not execute orders.
+- Disabled trade-plan saving for WAIT setups.
+
+
+## V6.1.3 Delete Trade Journal
+- Added Delete selected trade inside Trade Journal
+- Added confirmation checkbox before deleting
+- Trade Journal now shows more planned trades and includes trade IDs
+
+
+## V6.1.4 Overnight price
+- Added best-effort overnight / extended-hours quote fetching using yfinance.
+- Sidebar has an Overnight Quote tool.
+- Daily Desk cards can fetch overnight price per ticker.
+- Quotes may be delayed or unavailable depending on Yahoo/yfinance coverage.
