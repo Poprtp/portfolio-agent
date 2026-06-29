@@ -5,7 +5,7 @@ import streamlit as st
 from services.advisor import ai_advisor
 from services.alerts import decision_alerts
 from services.database import get_setting, init_db
-from services.discord_alerts import send_discord_alert
+from services.discord_alerts import alert_filter_settings, send_discord_alert
 from services.history import get_last_call_performance, save_daily_snapshot
 from services.journal import delete_trade, get_trade_journal, save_planned_trade, update_trade_status
 from services.market import fetch_overnight_quote
@@ -410,7 +410,9 @@ with st.sidebar:
     scan_limit = st.slider("Analyze symbols", min_value=10, max_value=50, value=50, step=5)
     with st.expander("Discord Alerts", expanded=False):
         st.caption("Manual test uses Streamlit secret DISCORD_WEBHOOK_URL. Scheduled alerts use GitHub repository secret with the same name.")
-        if st.button("Send test Discord alert", use_container_width=True):
+        settings = alert_filter_settings()
+        st.caption(f"Quality filter: READY ≥{settings['ready_min_score']:.0f}, REVIEW ≥{settings['review_min_score']:.0f}, near trigger ≤{settings['max_trigger_distance_pct']:.1f}%, R/R ≥{settings['min_rr']:.1f}R")
+        if st.button("Send quality-filtered test alert", use_container_width=True):
             webhook = get_discord_webhook()
             if not webhook:
                 st.error("Add DISCORD_WEBHOOK_URL to Streamlit secrets first.")

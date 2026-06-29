@@ -56,7 +56,8 @@ def main():
     print(f"Loaded alert watchlist rows: {loaded}")
 
     desk = trade_desk_watchlist(limit=scan_limit)
-    ok, status = send_discord_alert(webhook, desk, run_label=label, include_empty=args.include_empty)
+    include_empty = args.include_empty or os.getenv("GITHUB_EVENT_NAME", "") == "workflow_dispatch"
+    ok, status = send_discord_alert(webhook, desk, run_label=label, include_empty=include_empty)
     print(status)
     if not ok:
         raise SystemExit(1)

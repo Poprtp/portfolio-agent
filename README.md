@@ -71,3 +71,19 @@ Note: GitHub Actions cannot read Streamlit Cloud's local SQLite database. Schedu
 - Fixed GitHub Actions `ModuleNotFoundError: No module named services` by adding the repository root to Python path.
 - Added `PYTHONPATH` to the Discord workflow for extra stability.
 - Manual workflow runs now include an empty-result message so the Discord webhook can be tested even when no READY/REVIEW setups are found.
+
+## V6.3 Alert Quality Filter
+- Discord alerts are now stricter to reduce noise.
+- READY alerts require score >= 80, R/R >= 2.0, and price within 3% of Buy Trigger.
+- REVIEW alerts require score >= 75, R/R >= 2.0, price within 3% of Buy Trigger, and confirmation-style setup.
+- WAIT setups are never sent to Discord.
+- Manual workflow tests still send a message even if no candidate passes, so webhook testing is easy.
+
+Deploy:
+```powershell
+git add .
+git commit -m "Add Discord alert quality filter"
+git push
+```
+
+Then run GitHub Actions -> Discord Stock Alerts -> Run workflow.

@@ -18,6 +18,10 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       SCAN_LIMIT: "50"
       PYTHONPATH: ${{ github.workspace }}
+      ALERT_READY_MIN_SCORE: "80"
+      ALERT_REVIEW_MIN_SCORE: "75"
+      ALERT_MAX_TRIGGER_DISTANCE_PCT: "3.0"
+      ALERT_MIN_RR: "2.0"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,4 +37,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Send Discord alert
-        run: python scripts/send_discord_alerts.py --include-empty
+        run: python scripts/send_discord_alerts.py
