@@ -8,8 +8,6 @@ from services.trade import professional_trade_setup
 def get_watchlist() -> pd.DataFrame:
     with connect() as conn:
         df = pd.read_sql_query("SELECT * FROM watchlist ORDER BY ticker", conn)
-    if df.empty:
-        return df
     return df
 
 
@@ -25,7 +23,8 @@ def add_watchlist(ticker: str):
             VALUES (?, ?, ?, ?)
             ON CONFLICT(ticker) DO UPDATE SET
                 name=excluded.name,
-                current_price=excluded.current_price
+                current_price=excluded.current_price,
+                conviction=COALESCE(watchlist.conviction, excluded.conviction)
             """,
             (ticker, profile.get("name") or ticker, 3, profile.get("current_price") or 0),
         )
@@ -49,19 +48,24 @@ def trade_desk_watchlist(limit: int | None = None) -> pd.DataFrame:
             {
                 "Ticker": ticker,
                 "Name": row.get("name", ticker),
-                "Decision": setup["decision"],
-                "Score": setup["score"],
-                "Price": setup["current_price"],
-                "Entry": setup["entry"],
-                "Stop": setup["stop"],
-                "Target": setup["target"],
-                "R/R": setup["risk_reward"],
-                "Setup": setup["setup_type"],
-                "Trend": setup["trend"],
-                "Reason": "; ".join(setup.get("reasons", [])[:2]) or "; ".join(setup.get("risks", [])[:2]),
+                "Decision": setup.get("decision", "WAIT"),
+                "Score": setup.get("score", 0),
+                "Price": setup.get("current_price", row.get("current_price", 0) or 0),
+                "Entry": setup.get("entry", 0),
+                "Stop": setup.get("stop", 0),
+                "Target": setup.get("target", 0),
+                "R/R": setup.get("risk_reward", 0),
+                "Setup": setup.get("setup_type", "No clean setup"),
+                "Trend": setup.get("trend", "Unknown"),
+                "Reason": "; ".join(setup.get("reasons", [])[:2]) or "; ".join(setup.get("risks", [])[:2]) or "Added to watchlist",
             }
         )
-    result = pd.DataFrame(rows).sort_values(["Score", "Decision"], ascending=[False, True])
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result
+    order = {"READY": 0, "REVIEW": 1, "WAIT": 2}
+    result["_order"] = result["Decision"].map(order).fillna(3)
+    result = result.sort_values(["_order", "Score", "Ticker"], ascending=[True, False, True]).drop(columns=["_order"])
     if limit:
         return result.head(limit)
     return result

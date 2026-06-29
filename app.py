@@ -61,6 +61,8 @@ input, textarea, select {border-radius:10px !important;}
 .guide-item b {font-size:.72rem; color:var(--soft);}
 .guide-item div {font-size:.66rem; color:var(--muted); margin-top:3px; line-height:1.25;}
 .soft-line {height:1px; background:var(--line); margin:8px 0;}
+.success-mini {background:#f5f5f5; color:#050505; border-radius:10px; padding:7px 9px; margin:6px 0; font-size:.72rem;}
+.warning-mini {background:#171717; color:#d4d4d4; border:1px solid #3a3a3a; border-radius:10px; padding:7px 9px; margin:6px 0; font-size:.72rem;}
 </style>
 """,
     unsafe_allow_html=True,
@@ -75,14 +77,6 @@ def refresh_all():
     refresh_prices()
 
 
-def decision_copy(decision: str) -> str:
-    return {
-        "READY": "actionable today",
-        "REVIEW": "watch closely",
-        "WAIT": "skip for now",
-    }.get(str(decision).upper(), "review")
-
-
 def setup_copy(setup: str) -> str:
     setup_l = str(setup or "").lower()
     if "pullback" in setup_l or "continuation" in setup_l:
@@ -93,6 +87,8 @@ def setup_copy(setup: str) -> str:
         return "หุ้นยังน่าสนใจ แต่ราคายืดเกิน รอให้ย่อก่อน"
     if "no clean" in setup_l:
         return "ยังไม่มีจุดเข้าที่คุมความเสี่ยงได้ดีพอ"
+    if "insufficient" in setup_l:
+        return "ข้อมูลราคายังไม่พอ หรือดึงข้อมูลไม่ได้"
     return "ใช้เป็นระดับอ้างอิง ต้องเช็กกราฟก่อนตัดสินใจ"
 
 
@@ -137,7 +133,7 @@ def trade_card(row, muted=False):
 
 def holdings_view(df, height=235):
     if df.empty:
-        st.info("No holdings yet.")
+        st.info("No holdings yet. Add ticker, shares and average cost below.")
         return
     show = df[["ticker", "shares", "avg_cost", "current_price", "market_value", "gain_loss", "gain_loss_pct"]].copy()
     show = show.rename(
@@ -156,39 +152,66 @@ def holdings_view(df, height=235):
 
 def manage_watchlist_inline():
     with st.expander("Manage watchlist", expanded=False):
-        c1, c2, c3 = st.columns([1, .5, 1.5])
-        with c1:
-            ticker = st.text_input("Ticker", value="MSFT", key="watch_ticker").upper().strip()
-        with c2:
-            st.write("")
-            st.write("")
-            if st.button("Add", use_container_width=True) and ticker:
-                add_watchlist(ticker)
-                st.rerun()
-        with c3:
-            wdf = get_watchlist()
-            if not wdf.empty:
+        with st.form("watchlist_add_form", clear_on_submit=True):
+            c1, c2 = st.columns([1, .45])
+            with c1:
+                ticker = st.text_input("Add ticker", value="", placeholder="e.g. AMD, MSFT, TSM", key="watch_ticker_add").upper().strip()
+            with c2:
+                st.write("")
+                st.write("")
+                submitted = st.form_submit_button("Add", use_container_width=True)
+            if submitted:
+                if not ticker:
+                    st.markdown("<div class='warning-mini'>ใส่ Ticker ก่อน เช่น AMD หรือ MSFT</div>", unsafe_allow_html=True)
+                else:
+                    profile = add_watchlist(ticker)
+                    st.session_state["last_watch_added"] = ticker
+                    name = profile.get("name", ticker) if isinstance(profile, dict) else ticker
+                    st.markdown(f"<div class='success-mini'>Added {esc(ticker)} · {esc(name)}</div>", unsafe_allow_html=True)
+                    st.rerun()
+
+        wdf = get_watchlist()
+        if not wdf.empty:
+            st.caption(f"Watchlist: {len(wdf)} stocks. Newly added stocks now show in Focus/Skip list above.")
+            d1, d2 = st.columns([1, .45])
+            with d1:
                 del_ticker = st.selectbox("Remove", wdf["ticker"].tolist(), key="delete_watch")
+            with d2:
+                st.write("")
+                st.write("")
                 if st.button("Remove", use_container_width=True):
                     delete_watchlist(del_ticker)
+                    st.session_state["last_watch_removed"] = del_ticker
                     st.rerun()
 
 
 def manage_holdings_inline(holdings):
     with st.expander("Manage holdings", expanded=False):
-        c1, c2, c3, c4 = st.columns([.8, .65, .75, .75])
-        with c1:
-            ticker = st.text_input("Ticker", value="TSM", key="hold_ticker").upper().strip()
-        with c2:
-            shares = st.number_input("Shares", min_value=0.0, value=0.0, step=1.0, key="hold_shares")
-        with c3:
-            avg = st.number_input("Avg Cost", min_value=0.0, value=0.0, step=1.0, key="hold_avg")
-        with c4:
-            st.write("")
-            st.write("")
-            if st.button("Save", use_container_width=True) and ticker:
-                upsert_holding_auto(ticker, shares, avg)
-                st.rerun()
+        with st.form("holding_save_form", clear_on_submit=True):
+            c1, c2, c3, c4 = st.columns([.8, .65, .75, .75])
+            with c1:
+                ticker = st.text_input("Ticker", value="", placeholder="e.g. RKLB", key="hold_ticker_add").upper().strip()
+            with c2:
+                shares = st.number_input("Shares", min_value=0.0, value=0.0, step=1.0, key="hold_shares_add")
+            with c3:
+                avg = st.number_input("Avg Cost", min_value=0.0, value=0.0, step=1.0, key="hold_avg_add")
+            with c4:
+                st.write("")
+                st.write("")
+                submitted = st.form_submit_button("Save", use_container_width=True)
+            if submitted:
+                if not ticker:
+                    st.markdown("<div class='warning-mini'>ใส่ Ticker ก่อน</div>", unsafe_allow_html=True)
+                elif shares <= 0:
+                    st.markdown("<div class='warning-mini'>ใส่จำนวนหุ้นมากกว่า 0 ก่อน ไม่งั้น Dashboard จะไม่แสดง</div>", unsafe_allow_html=True)
+                elif avg <= 0:
+                    st.markdown("<div class='warning-mini'>ใส่ Average Cost มากกว่า 0 ก่อน</div>", unsafe_allow_html=True)
+                else:
+                    profile = upsert_holding_auto(ticker, shares, avg)
+                    st.session_state["last_holding_saved"] = ticker
+                    name = profile.get("name", ticker) if isinstance(profile, dict) else ticker
+                    st.markdown(f"<div class='success-mini'>Saved {esc(ticker)} · {esc(name)}</div>", unsafe_allow_html=True)
+                    st.rerun()
 
         if not holdings.empty:
             d1, d2 = st.columns([1, .75])
@@ -233,6 +256,9 @@ with left:
         unsafe_allow_html=True,
     )
 
+    if "last_watch_added" in st.session_state:
+        st.caption(f"Last added: {st.session_state['last_watch_added']}")
+
     if desk.empty:
         st.markdown(
             """
@@ -273,14 +299,14 @@ with left:
         if actionable.empty:
             st.markdown("<div class='card-compact muted'>No actionable setups today. Best action is to wait.</div>", unsafe_allow_html=True)
         else:
-            for _, row in actionable.head(3).iterrows():
+            for _, row in actionable.iterrows():
                 trade_card(row)
 
         st.markdown('<div class="section-title">Skip Today</div>', unsafe_allow_html=True)
         if skip.empty:
             st.markdown("<div class='card-compact muted'>No skip list right now.</div>", unsafe_allow_html=True)
         else:
-            for _, row in skip.head(4).iterrows():
+            for _, row in skip.iterrows():
                 trade_card(row, muted=True)
 
     manage_watchlist_inline()

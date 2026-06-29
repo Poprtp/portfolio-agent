@@ -1,20 +1,18 @@
-# Portfolio OS 5.3 — Decision UX
+# Portfolio OS 5.3.1 Add Fix
 
-One-page monotone portfolio desk with clearer trader decision language.
+Hotfix for one-page monotone Portfolio Desk.
 
-## What changed
+Fixes:
+- Watchlist Add now uses a form and shows feedback.
+- Newly added tickers are not hidden by top-4 Skip Today limit anymore.
+- Focus Today and Skip Today now show all watchlist items.
+- Holdings Save now validates Ticker, Shares, and Avg Cost before saving.
+- If Shares is 0, the app explains why it will not appear in Dashboard.
 
-- Replaced the dense Watchlist table with readable trade cards.
-- Added Decision guide: READY / REVIEW / WAIT.
-- Renamed Entry to Buy Trigger where appropriate.
-- Split watchlist into Focus Today and Skip Today.
-- Added plain-language setup explanations.
-- Kept Dashboard on the right with P/L, holdings, risk notes, and allocation.
-- Sidebar remains removed.
+Deploy:
 
-## Run locally
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
+```powershell
+git add .
+git commit -m "Fix add watchlist and holdings visibility"
+git push
 ```
